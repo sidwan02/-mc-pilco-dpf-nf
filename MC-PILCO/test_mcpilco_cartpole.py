@@ -32,6 +32,10 @@ p = argparse.ArgumentParser('test cartpole')
 p.add_argument('-seed', type=int, default=1, help='seed')
 locals().update(vars(p.parse_known_args()[0]))
 
+print(torch.cuda.is_available())
+print(torch.version.cuda)
+# ha
+
 # Set the seed
 torch.manual_seed(seed)
 np.random.seed(seed)

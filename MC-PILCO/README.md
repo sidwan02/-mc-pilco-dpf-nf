@@ -1,15 +1,15 @@
 Copyright (c) 2020 Mitsubishi Electric Research Laboratories (MERL).
 
-All rights reserved. The software, documentationand/or data in this file is provided on an "as is" basis, 
-and MERL has no obligations to provide maintenance, support, updates, enhancements or modifications.  
+All rights reserved. The software, documentationand/or data in this file is provided on an "as is" basis,
+and MERL has no obligations to provide maintenance, support, updates, enhancements or modifications.
 
-MERL specifically disclaims any warranties, including, but not limited to, the implied warranties of merchantability 
-and fitness for anyparticular purpose.In no event shall MERL be liable to any party for direct, indirect, special, 
-incidental, or consequential damages, including lost profits, arising out of the use of this software and its documentation, 
+MERL specifically disclaims any warranties, including, but not limited to, the implied warranties of merchantability
+and fitness for anyparticular purpose.In no event shall MERL be liable to a]ny party for direct, indirect, special,
+incidental, or consequential damages, including lost profits, arising out of the use of this software and its documentation,
 even if MERL has been advised of the possibility of such damages.
 
-As more fully described in the license agreement that was required in order to download this software, documentation 
-and/or data, permission to use, copy and modify this software without fee is granted, but only for educational, 
+As more fully described in the license agreement that was required in order to download this software, documentation
+and/or data, permission to use, copy and modify this software without fee is granted, but only for educational,
 research and non-commercial purposes.
 
 # MC-PILCO
@@ -23,6 +23,7 @@ The user has the possibility to add his own python system or Mujoco Environment 
 Please refer to the guide for a more detailed explanation of the code base.
 
 ## Dependencies
+
 - [PyTorch 1.4 or superior] (https://pytorch.org/)
 - [NumPy] (https://numpy.org/)
 - [Matplotlib] (https://matplotlib.org/)
@@ -31,20 +32,23 @@ Please refer to the guide for a more detailed explanation of the code base.
 - [gpr_lib] is provided courtesy of Alberto Dalla Libera with permission to redistribute as part of this software package.
 
 # Optional
+
 - [MuJoCo 2.00](http://www.mujoco.org/)
-- [MuJoCo-Py] (https://github.com/openai/mujoco-py) 
+- [MuJoCo-Py] (https://github.com/openai/mujoco-py)
 - [Gym] (http://gym.openai.com/)
 
 ## Installation
+
 1. Download the source code.
 2. Create a python environment with the following packages: PyTorch, NumPy, Matplotlib, Pickle, Argparse.
 3. If you want to test the code on MuJoCo environments, make sure to have also MuJoCo_py and Gym libraries.
 
 ## Usage
+
 Please refer to the guide 'MC_PILCO_Software_Package.pdf'
 
-
 ## Examples
+
 Inside 'mc_pilco' folder:
 
 - Run '$ python test_mcpilco_cartpole.py' to test MC-PILCO in the cartpole swing-up task (GP model with squared-exponential+polynomial kernel).
@@ -54,6 +58,6 @@ Inside 'mc_pilco' folder:
 - Run '$ python test_mcpilco_cartpole_mujoco.py' to test MC-PILCO in the cartpole swing-up task in MuJoCo.
 - Run '$ python test_mcpilco_ur5_mujoco.py' to use MC-PILCO to learn a joint-space controller for a UR5 robot arm in MuJoCo.
 
-
 ## Citing
+
 If you use this package, please cite the following paper: Amadio, F.et al. Model-Based Policy Search Using Monte Carlo Gradient Estimation with RealSystems Application. arXiv preprint (2021). 2101.12115.
