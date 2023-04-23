@@ -1,5 +1,5 @@
 *.pyc
 **/__pycache__/
-results_tmp*
+# results_tmp*
 !results_tmp/.gitkeep
 
