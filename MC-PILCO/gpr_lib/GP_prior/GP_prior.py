@@ -13,7 +13,11 @@ from .. import Likelihood
 
 
 class GP_prior(torch.nn.Module):
-    """Superclass of GP models"""
+    """Superclass of GP models
+    
+    #Mason: we assume a gaussian prior over our models which means that the function at any input
+    is specified by mean and covariance function
+    """
 
 
     def __init__(self, active_dims,

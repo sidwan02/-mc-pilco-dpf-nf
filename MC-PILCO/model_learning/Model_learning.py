@@ -54,11 +54,18 @@ class Model_learning(torch.nn.Module):
         self.device = device
         self.init_dict_list = init_dict_list
         # Get the gp list
-        self.num_gp = num_gp
+        self.num_gp = num_gp #multi-output regression / ensembling / scaling to large DS (partitioning??)
+        
+        #This is a vector derived from the product of the inverse of the kernel matrix (K_X_inv) and 
+        #the target values (y). It is used in making predictions with Gaussian process regression, and precomputing it can help speed up the prediction process.
         self.alpha_list = [None]*num_gp
         self.m_X_list = [None]*num_gp 
+
+        #This is the inverse of the covariance matrix (kernel matrix) K_X associated with the input data
+        #points. The kernel matrix quantifies the similarity between pairs of input points and plays a crucial role in making predictions using Gaussian processes.
         self.K_X_inv_list = [None]*num_gp
         self.gp_inputs_tr_list = [None]*num_gp
+
         # check approximation
         self.approximation_mode = approximation_mode
         if approximation_mode is None:
@@ -89,6 +96,8 @@ class Model_learning(torch.nn.Module):
         """
         Init gp models
         """
+
+        #The ModuleList class provides a simple interface for accessing individual layers and iterating over them
         self.gp_list = torch.nn.ModuleList([self.get_gp(gp_index = gp_index,
                                                         init_dict = self.init_dict_list[gp_index])
                                             for gp_index in range(0,self.num_gp)])
@@ -135,7 +144,9 @@ class Model_learning(torch.nn.Module):
                                                                                 dtype = self.dtype,
                                                                                 device = self.device))      
             # update samples set
-            self.gp_inputs = torch.cat([self.gp_inputs, (new_gp_inputs)])
+            self.gp_inputs = torch.cat([self.gp_inputs, (new_gp_inputs)]) #we store all data internally
+
+            #
             self.gp_output_list = [torch.cat([self.gp_output_list[gp_index], 
                                               new_gp_output_list[gp_index]], 0)
                                    for gp_index in range(0, self.num_gp)]
@@ -451,6 +462,7 @@ class Model_learning(torch.nn.Module):
         return [(states[1:,i]-states[:-1,i]).reshape([-1,1]) for i in range(0,self.dim_state)]
 
 
+    #How the data is processed
     def data_to_gp_IO(self, states, inputs):
         """
         Returns the GP dataset given states and inputs
@@ -465,17 +477,25 @@ class Model_learning(torch.nn.Module):
         -the current state
         -the current inputs
         -a list with mean and variance of the gp output
+
+
+        GAUSSIAN ASSUMPTION ON NEXT STATE DISTRIBUTION
+         -- we will need to change the way we sample
+
         """
         #  mean and variance of delta distribution
         delta_mean = torch.cat(gp_output_mean_list,1)
         delta_var = torch.cat(gp_output_var_list,1)
         if particle_pred == True:
-            # sample delta from distribution
-            delta_distribution = Normal(delta_mean,torch.sqrt(delta_var))  
+            # sample delta from distribution --> should make this more expressive
+            delta_distribution = Normal(delta_mean,torch.sqrt(delta_var))  #GAUSSIAN
+
             delta_sample = delta_distribution.rsample()
             # delta_sample = delta_mean + torch.sqrt(delta_var)*torch.randn(delta_mean.shape, dtype=self.dtype, device=self.device)
         else:
             delta_sample = delta_mean
+        
+        # we are predicting the delta between states
         # get the next state
         next_states = current_state + delta_sample
         # return the next state and the delta distribution
