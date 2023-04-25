@@ -82,7 +82,10 @@ class Stationary_GP(GP_prior.GP_prior):
 
 
 class RBF(Stationary_GP):
-    """Implementation of the standard RBF GP with constant mean"""
+    """Implementation of the standard RBF GP with constant mean
+    
+    The kernel defines the covariancbe between any pair of input points in the GP
+    """
     
 
     def __init__(self, active_dims,

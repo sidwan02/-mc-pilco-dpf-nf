@@ -8,7 +8,14 @@ import numpy as np
 
 
 class Marginal_log_likelihood(torch.nn.modules.loss._Loss):
-    """Computes the negative marginal log likelihood under gaussian assumption"""
+    """Computes the negative marginal log likelihood under gaussian assumption
+    
+    #Mason: Marginal --> intergrated over all possible values of the function
+    #We aim to maximize this 
+
+    #likelihood of observed data 
+    #this will be used to get optimzal hyper-parameters that best fit observed data
+    """
 
 
     def forward(self, output_GP_prior, Y):
@@ -28,7 +35,15 @@ class Marginal_log_likelihood(torch.nn.modules.loss._Loss):
 class Posterior_log_likelihood(torch.nn.modules.loss._Loss):
     """Computes an approxmation of the posterior negative marginal log likelihood,
        where each sample is assumed gaussian and independent, i.e. the 
-       covariance matrix is diagonal"""
+       covariance matrix is diagonal
+       
+       
+       #  liklihood of observed data given model predictions + noise
+       #  computes is based on the assumption that each sample in the data is Gaussian and independent, with a diagonal covariance matrix. 
+       #  use the posterior distribution to compute uncertainty estimates for the model predictions, such as prediction intervals or credible intervals.
+
+
+         """
 
 
     def forward(self, Y, Y_hat, var):

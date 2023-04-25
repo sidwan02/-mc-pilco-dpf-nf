@@ -8,6 +8,12 @@
 Authors: 	Alberto Dalla Libera (alberto.dallalibera.1@gmail.com)
          	Fabio Amadio (fabioamadio93@gmail.com)
 MERL contact:	Diego Romeres (romeres@merl.com)
+
+
+
+Cost Function is specific to an environment
+We want mean and std of cost at each time step over all particles
+    we sum over all partlices to get average 
 """
 
 import torch
@@ -31,6 +37,8 @@ class Expected_cost(torch.nn.modules.loss._Loss):
         """
 
         # Returns the sum of the expected costs
+        # The cost function gives us the cost here
+        # asd 
         costs = self.cost_function(states_sequence, inputs_sequence, trial_index)
         mean_costs = torch.mean(costs, 1) # average cost at each time step over particles ...
         std_costs = torch.std(costs.detach(),1) # ... and corresponding std
@@ -43,13 +51,24 @@ class Expected_distance(Expected_cost):
     Cost function given by the sum of the expected distances from target state
     """
     def __init__(self, target_state, lengthscales, active_dims):
+
+        #cost function is initalized and doesn't need to be changed
         # get the distance function as a function of states and inputs
         f_cost = lambda x, u, trial_index: distance_from_target(x, u, trial_index, target_state=target_state, lengthscales=lengthscales, active_dims=active_dims)
         # initit the superclass with the lambda function
         super(Expected_distance, self).__init__(f_cost)
 
 def distance_from_target(states_sequence, inputs_sequence, trial_index, target_state, lengthscales, active_dims):
-    # normalize states and targets (consider only used states)
+    
+    '''normalize states and targets (consider only used states)
+     
+        because we use the simulated particle trajectories (states),
+        we don't need to use the uncertainty for each one, the idea is that
+        if we have enough particles we will be able to approximate the 
+        underlying distribution. remember our total cost is the average cost
+        over particles
+
+    '''
     norm_states = states_sequence[:,:,active_dims]/lengthscales
     norm_target = target_state/lengthscales
 

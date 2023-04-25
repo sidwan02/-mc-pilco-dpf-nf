@@ -10,7 +10,27 @@ from .. import Likelihood
 # import scipy
 # import quadprog
 # from qpth.qp import QPFunction
+"""
+GP_prior: a superclass of GP models, which includes methods for setting the device, data type, active dimensions, and measurement noise.
 
+Combine_GP: a class for combining multiple GP models into one model, with methods for printing the model parameters and computing the noise variance.
+
+Sum_Independent_GP: a class for summing independent GP models, with methods for computing the mean, covariance, and diagonal covariance.
+
+Multiply_GP_prior: a class for multiplying GP models, with methods for computing the mean and covariance.
+
+
+Notes:
+
+GP Prior:
+    Uses the kernel function to determin the similary between two points in input space,
+    this defines the covariance matrix of the gaussian process. then we use this to sample from
+    prior to get a sample of potential functions
+
+    
+    During training we are learning the kernerl hyper-params related to nosie
+
+"""
 
 class GP_prior(torch.nn.Module):
     """Superclass of GP models

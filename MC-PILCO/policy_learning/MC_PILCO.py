@@ -40,7 +40,7 @@ class MC_PILCO(torch.nn.Module):
         self.T_sampling = T_sampling # sampling time
         self.dtype = dtype # data type
         self.device = device # device
-        self.state_dim = state_dim # state dimension
+        self.state_dim = state_dim # state dimension (how is this different from input)
         self.input_dim = input_dim # input dimension
         # get the simulated system
         print('\n\nGet the system...')
@@ -82,6 +82,21 @@ class MC_PILCO(torch.nn.Module):
                   loaded_model = False):
         """
         Model learning + policy learning method
+        a. Reinforce the Model: The model is updated by training the Gaussian Process (GP) models on the observed interaction data.
+
+        b. Check the Learning Performance: The performance of the learned model is checked after the model update.
+
+        c. Check the Rollout Performance: The performance of the rollout prediction is checked after the model update.
+
+        d. Reinforce the Policy: The policy is updated based on particle-simulation with the learned model.
+
+        e. Save the Cost Components: The costs, policy parameters, particle states, and particle inputs are saved for the current trial.
+
+        f. Apply the Control Policy: The control policy is applied to interact with the system using the current initial state.
+
+        g. Check the Model Learning Performance: The performance of the learned model is checked before the next model update.
+
+        h. Check the Rollout Performance: The performance of the rollout prediction is checked before the next model update.
         """
         # get initial data
         if not loaded_model:
@@ -92,6 +107,7 @@ class MC_PILCO(torch.nn.Module):
                 if random_initial_state == True: # initial state randomly sampled
                     if flg_init_uniform == True: # uniform initial distribution
                         x0 = np.random.uniform(init_low_bound,init_up_bound)
+
                     elif flg_init_multi_gauss == True: # multimodal gaussians initial distribution
                         num_init = np.random.randint(initial_state.shape[0])
                         x0 = np.random.normal(initial_state[num_init,:],np.sqrt(initial_state_var[num_init,:]))
@@ -237,6 +253,7 @@ class MC_PILCO(torch.nn.Module):
         Test model learning performance in the data_collection_index simulation
         """
         # get gp predictions
+        # GAUSSIAN ASSUMPTION
         gp_inputs, gp_outputs_target_list,\
         gp_output_mean_list, gp_output_var_list = self.model_learning.get_gp_estimate_from_data(states = torch.tensor(self.state_samples_history[data_collection_index],
                                                                                                                     dtype = self.dtype, device = self.device),
@@ -256,6 +273,7 @@ class MC_PILCO(torch.nn.Module):
 
             print('MSE gp'+str(gp_index)+': ',
                   ((gp_outputs_target_list[gp_index]-gp_output_mean_list[gp_index])**2).mean())
+            
         #     # uncomment to plot model learning performance
         #     plt.figure()
         #     plt.plot(gp_outputs_target_list[gp_index], label = 'y '+str(gp_index))
@@ -272,6 +290,8 @@ class MC_PILCO(torch.nn.Module):
     def get_rollout_prediction_performance(self, data_collection_index, T_rollout = None, add_name = '', particle_pred = False):
         """
         Test rollout prediction
+            Call Rollout
+            Gets the Error over Simulation
         """
         # simulate rollout with inputs from 'data_collection_index' trial
         rollout_states = self.rollout(data_collection_index = data_collection_index,
@@ -315,8 +335,11 @@ class MC_PILCO(torch.nn.Module):
                                   device = self.device)
         rollout_trj[0:1,:] = current_state_tc
       	# simulate system evolution for 'T_rollout' steps
+        # interate over the rollout horizon (simple for loop)
         for t in range(1,T_rollout):
-            # get next state
+
+            ## GAUSSIAN ASSUMPTION --> the way that we get next state
+            # get next state --> 
             rollout_trj[t:t+1,:], _, _ = self.model_learning.get_next_state(current_state = rollout_trj[t-1:t,:],
                                                                             current_input = inputs_trajectory_tc[t-1:t,:],
                                                                             particle_pred = particle_pred)
@@ -333,6 +356,23 @@ class MC_PILCO(torch.nn.Module):
         
         """
         Improve the policy parameters with MC optimization
+        ###################STEPS ##############################333333
+        Initialize cost variables, dropout parameters, and filters for monitoring cost improvement.
+        Compute the initial cost with no dropout applied.
+        Get the optimizer with the learning rate specified for the trial.
+        Start the optimization loop with a maximum number of optimization steps.
+        Set the gradient to zero.
+        Apply the policy in simulation and compute the expected cost.
+        Save the current step's cost.
+        Update filters for monitoring cost improvement.
+        Compute the gradient and optimize the policy using the computed cost --> gradients should flow th
+        Periodically print optimization progress, including cost, cost improvement, dropout parameters, and time elapsed.
+        Check learning rate and exit conditions:
+        If the cost improvement ratio is below the minimum difference cost for a specified number of steps, reduce the learning rate and dropout if possible.
+        Exit the optimization if the learning rate reaches its minimum value.
+        Increase the step counter.
+        Reinitialize the policy if NaN appears in the cost and reset counters, cost variables, optimizer, and dropout.
+        After the optimization loop is completed, return the cost list, standard deviation of cost, final states, and inputs sequences
         """
 
         # init cost variables
@@ -527,6 +567,21 @@ class MC_PILCO(torch.nn.Module):
                      num_particles, T_control, p_dropout = 0.):
         """
         Apply the policy in simulation to a batch of particles:
+
+
+        takes the initial state, number of particles, control horizon, and dropout probability as input parameters.
+        Sample the initial state of particles based on the provided initial state mean, variance, and other specified methods (e.g., uniform or multi-Gaussian).
+        Iterate through the control horizon and generate the control inputs by evaluating the policy for each particle's state.
+        Apply dropout to the control inputs if specified.
+
+        Simulate the system dynamics by passing the current state and control input to the transition function.
+        Update the particle states based on the simulated system dynamics.
+        Compute the expected cost using the cost_function, which takes the states and inputs sequences and the trial index as input parameters. The cost function evaluates the cost based on the user-defined cost criteria and the final state of the particles after applying the policy.
+        Calculate the gradient of the cost with respect to the policy parameters using backpropagation (cost.backward()).
+        Update the policy parameters using the optimizer, which adjusts the parameters based on the computed gradients and the specified learning rate. 
+
+
+
         """
         # initialize variables
         states_sequence_list = []
@@ -559,6 +614,7 @@ class MC_PILCO(torch.nn.Module):
         for t in range(1,int(T_control)):
 
             # get next state mean and variance (given the states sampled and the inputs computed)
+            
             particles, _, _ = self.model_learning.get_next_state(current_state = states_sequence_list[t-1],
                                                                  current_input = inputs_sequence_list[t-1])
             states_sequence_list.append(particles)

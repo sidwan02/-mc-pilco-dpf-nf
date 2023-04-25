@@ -20,7 +20,7 @@ import numpy as np
 import model_learning.Model_learning as ML
 import policy_learning.Policy as Policy
 import policy_learning.MC_PILCO as MC_PILCO
-import policy_learning.Cost_function as Cost_function
+import policy_learning.Cost_function as Cost_function #Mason: this is where cost function is derived
 import simulation_class.ode_systems as f_ode
 import gpr_lib.Likelihood.Gaussian_likelihood as Likelihood
 import gpr_lib.Utils.Parameters_covariance_functions as cov_func
