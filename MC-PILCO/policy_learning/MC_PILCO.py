@@ -81,6 +81,7 @@ class MC_PILCO(torch.nn.Module):
                   random_initial_state = True,
                   loaded_model = False):
         """
+        #MASON
         Model learning + policy learning method
         a. Reinforce the Model: The model is updated by training the Gaussian Process (GP) models on the observed interaction data.
 
@@ -97,6 +98,11 @@ class MC_PILCO(torch.nn.Module):
         g. Check the Model Learning Performance: The performance of the learned model is checked before the next model update.
 
         h. Check the Rollout Performance: The performance of the rollout prediction is checked before the next model update.
+        
+        
+        We need to now add a training method for the Normalizing Flows
+            Inputs:
+                
         """
         # get initial data
         if not loaded_model:
@@ -145,7 +151,12 @@ class MC_PILCO(torch.nn.Module):
         #reinforce the model and the policy
         for trial_index in range(first_trial_index, last_trial_index):
             print('\n\n\n\n----------------- TRIAL '+str(trial_index)+' -----------------')
+
+
             # train GPs on observed interaction data
+            # MASON -->
+            # THIS IS THE METHOD THAT WE NEED TO CHANGE NOW --> WE HAVE A FLOW AND THIS MUST BE UPDATED
+            
             print('\n\n----- REINFORCE THE MODEL -----')
             self.model_learning.reinforce_model(optimization_opt_list = model_optimization_opt_list)
             
@@ -339,7 +350,8 @@ class MC_PILCO(torch.nn.Module):
         for t in range(1,T_rollout):
 
             ## GAUSSIAN ASSUMPTION --> the way that we get next state
-            # get next state --> 
+            # get next state --> WE NEED TO CHANGE THISSSSSSSSSS
+            # MASON
             rollout_trj[t:t+1,:], _, _ = self.model_learning.get_next_state(current_state = rollout_trj[t-1:t,:],
                                                                             current_input = inputs_trajectory_tc[t-1:t,:],
                                                                             particle_pred = particle_pred)
@@ -433,6 +445,7 @@ class MC_PILCO(torch.nn.Module):
         optimizer = f_optim(p = self.control_policy.parameters(), lr = lr)
 
         # optimize the policy
+        # this is the optimization step, before we were just taking initlaizations
         opt_step = 0
         opt_step_done = 0
         t_start = time.time()
@@ -477,6 +490,7 @@ class MC_PILCO(torch.nn.Module):
 
 
             # compute the gradient and optimize the policy
+            # this is where we backprop
             cost.backward(retain_graph = False)
             
             # updata parameters
@@ -586,7 +600,8 @@ class MC_PILCO(torch.nn.Module):
         # initialize variables
         states_sequence_list = []
         inputs_sequence_list = []
-
+        
+        # this looks like the only place variance of particles is sampled
         # get initial particles
         if flg_particles_init_uniform == True:
             # initial uniform distribution
@@ -594,6 +609,7 @@ class MC_PILCO(torch.nn.Module):
             uniform_lb_particles = particles_init_low_bound.repeat(num_particles,1)
             state_distribution = Uniform(uniform_lb_particles, uniform_ub_particles)
         elif flg_particles_init_multi_gauss == True:
+
             # initial multimodal Gaussian distribution
             indices = torch.randint(0,particles_initial_state_mean.shape[0], [num_particles])
             initial_particles_mean = particles_initial_state_mean[indices,:]
@@ -790,6 +806,7 @@ class MC_PILCO4PMS(MC_PILCO):
 
         for t in range(1,int(T_control)):
             # get next state mean and variance (given the states sampled and the inputs computed)
+            # MASON: Doesnt even use mean / variance for next states lmao
             particles, _, _ = self.model_learning.get_next_state(current_state=states_sequence_list[t-1],
                                                                  current_input=inputs_sequence_list[t-1])
             states_sequence_list.append(particles)

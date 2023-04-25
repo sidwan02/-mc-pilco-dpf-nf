@@ -39,9 +39,15 @@ from torch.distributions.normal import Normal
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 class Model_learning(torch.nn.Module):
     """
     Model learning Class
+    MASON:
+        We can either make the flow changes inside this class or make another Model_Learning_Flow class
+        that inherents and overrides the existing methods: i vote the latter am making comments here
+        for brevity rn
+
     """
     def __init__(self, num_gp, init_dict_list,
                  approximation_mode = None, approximation_dict = None,
@@ -65,6 +71,9 @@ class Model_learning(torch.nn.Module):
         #points. The kernel matrix quantifies the similarity between pairs of input points and plays a crucial role in making predictions using Gaussian processes.
         self.K_X_inv_list = [None]*num_gp
         self.gp_inputs_tr_list = [None]*num_gp
+
+        ########## MASON ##############
+        #self.flow = flow_model(input_dim, output_dim, num_flows) #create a NF class in pytorch --> initalize hyperparams
 
         # check approximation
         self.approximation_mode = approximation_mode
@@ -164,10 +173,14 @@ class Model_learning(torch.nn.Module):
         for gp_index in range(0,self.num_gp):
             self.train_gp(gp_index = gp_index,
                           optimization_opt_dict = optimization_opt_list[gp_index])
+            
             # pretrain each gp (compute alpha, m_X and K_X_inv)
+            # our flow pretraining will NEED gradients 
             with torch.no_grad():
                 self.pretrain_gp(gp_index = gp_index)
 
+    ###########MASON################
+    #  will also need a pretrain_flow aspect to this as well
 
     def pretrain_gp(self, gp_index):
         """
@@ -219,21 +232,50 @@ class Model_learning(torch.nn.Module):
         """
         Predict the next state given the the current state-input (batches supported).
         Method returns next state samples, together with mean and variance of the gp prediction
+
+        This is the heart of the rollout method + apply_policy 
+            and will decide how our states are chosen --> 
         """
         # Get the gp estimate
         _, _, gp_output_mean_list, gp_output_var_list = self.get_one_step_gp_out(states = current_state,
                                                                                  inputs = current_input)
-
-       	for i in range(self.num_gp):
+        
+        #scaling the output of the GP with the normalization factor
+        for i in range(self.num_gp):
             gp_output_var_list[i] = gp_output_var_list[i]*self.norm_list[i]**2
+
+        
+        # ############# With a FLOW #######################
+        # NOT CORRECT PLACEMENT
+        # # gp_inputs: state, action values
+        # # gp_outputs_list: predicted next state values for each of the Gaussian processes
+        # # gp_output_mean_list: the mean predictions for the next state values.
+        # # gp_output_var_list: likely contains the variance predictions for the next state values.
+
+        
+        # # each Gaussian process is used to model a different output dimension, we need to apply a separate normalizing flow transformation to the
+        # # output of each Gaussian process to map it to the desired distribution. 
+        # # Transform the predicted next state distributions with a normalizing flow
+        # if with_flow: 
+        #     gp_outputs_list_transformed = []
+        #     for i in range(self.num_gp):
+        #         gp_outputs = gp_outputs_list[i]
+        #         transformed_gp_outputs, _ = self.flow_list[i](gp_outputs)
+        #         gp_outputs_list_transformed.append(transformed_gp_outputs)
+
+        # ###################################################
+
         # Get the next state form gp IO and return
+        # ONLY THE PARTICLES ARE EVER USED FROM THIS METHOD WE DO NOT NEED MEAN / VAR AGAIN
+        # rollout_trj[t:t+1,:], _, _ = self.model_learning.get_next_state
+        # next_states, delta_mean, delta_var= self.get_next_state_from_gp_output
         return self.get_next_state_from_gp_output(current_state = current_state,
                                                   current_input = current_input,
                                                   gp_output_mean_list = gp_output_mean_list,
                                                   gp_output_var_list = gp_output_var_list,
                                                   particle_pred = particle_pred)
-
-
+    
+        
     def get_one_step_gp_out(self, states, inputs):
         """
         Compute input-output of the gp and performs estimation:
@@ -487,18 +529,58 @@ class Model_learning(torch.nn.Module):
         delta_mean = torch.cat(gp_output_mean_list,1)
         delta_var = torch.cat(gp_output_var_list,1)
         if particle_pred == True:
-            # sample delta from distribution --> should make this more expressive
-            delta_distribution = Normal(delta_mean,torch.sqrt(delta_var))  #GAUSSIAN
 
+            # sample delta from distribution --> should make this more expressive
+            delta_distribution = Normal(delta_mean,torch.sqrt(delta_var))  #GAUSSIAN   
             delta_sample = delta_distribution.rsample()
             # delta_sample = delta_mean + torch.sqrt(delta_var)*torch.randn(delta_mean.shape, dtype=self.dtype, device=self.device)
+
         else:
             delta_sample = delta_mean
+
+        ######################################################################################
+        # NORMALIZING FLOW PREDICTION:
+
+        # These question is if we need the mean, variances --> we can move this out of method
+        # and into get_next_state too --> here for now
+        # I think that the variance should also be passed to the flow: base dist == gaussian
+        # How are the gradients going to flow through this????
+
+        ##### Method 1 ########################3
+        # I am making assumption NF is conditioned on the prediction from pred gp_mean , gp_var of next state
+        # Define base distribution of the flow
+        # if flow1:
+        #     base_distribution = Normal(delta_mean, torch.sqrt(delta_var))
+
+        #     # Condition the flow on the predicted mean and variance of the Gaussian processes
+        #     self.flow.condition(current_input, delta_mean, delta_var)
+
+        #     # Transform the base distribution with the flow
+        #     transformed_distribution = self.flow(base_distribution)
+
+        #     # Sample from the transformed distribution
+        #     delta_sample = transformed_distribution.sample()
+
+        #####Method 2 #############
+
+        # # concatenate current state, delta mean, and current input as input to flow
+        # x = torch.cat([current_state, delta_mean, current_input], dim=-1)
+        # # apply normalizing flow to get samples from transformed distribution
+        # y, log_det = self.flow(x)
+        # # split y into next state and transformed delta mean
+        # next_states, delta_mean_transformed = y.chunk(2, dim=-1)
+
+        ######################## Incorrect but Useful Implementation ################
+        #this assumes mean zero, unit variance as a base
+        #delta_sample, _ = self.flow.sample(num_samples=delta_mean.shape[0], context=torch.cat([current_state, current_input], dim=1))
+
         
         # we are predicting the delta between states
         # get the next state
         next_states = current_state + delta_sample
+
         # return the next state and the delta distribution
+        # Mason: What is the use of delta_mean/var if the distributions have been changed now!!
         return next_states, delta_mean, delta_var
 
 
