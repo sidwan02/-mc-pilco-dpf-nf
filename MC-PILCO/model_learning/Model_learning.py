@@ -169,7 +169,11 @@ class Model_learning(torch.nn.Module):
         """
         #initialize the GP models
         self.init_gp_models()
+
         # train each gp
+        # what data is this using?
+        # gp_inputs, gp_output_list are collected from environment and the same as state_samples
+        # X = self.gp_inputs[permutation_indices,:],Y = self.gp_output_list[gp_index][permutation_indices,:],
         for gp_index in range(0,self.num_gp):
             self.train_gp(gp_index = gp_index,
                           optimization_opt_dict = optimization_opt_list[gp_index])
@@ -180,7 +184,98 @@ class Model_learning(torch.nn.Module):
                 self.pretrain_gp(gp_index = gp_index)
 
     ###########MASON################
+
     #  will also need a pretrain_flow aspect to this as well
+    #  this will only be called once (at beginning of training)
+    def reinforce_flow(self, state_samples, input_samples, optimization_opt_dict=None):
+        # Create an optimizer for the single flow
+        optimizer = torch.optim.Adam(self.flow.parameters(), lr=1e-3)
+
+        # Train the single flow
+        self.train_nf(state_samples=state_samples,
+                    input_samples=input_samples,
+                    optimizer=optimizer)
+
+    # SINGLE FLOW TRAINING
+    def train_nf(self, state_samples, input_samples, optimizer):
+        num_epochs = 100
+        for epoch in range(num_epochs):
+            total_loss = 0
+
+            for trajectory, input_trajectory in zip(state_samples, input_samples):
+                for i in range(1, len(trajectory)):
+                    next_state = trajectory[i]
+                    cur_state = trajectory[i - 1]
+                    cur_input = input_trajectory[i - 1]
+                    pred_state = self.get_next_state(cur_state, cur_input, flow_flag=True)
+
+                    # Calculate the loss for the entire state space
+                    loss = torch.nn.MSELoss()(pred_state, next_state)
+                    total_loss += loss.item()
+
+                    # Zero the gradients for the optimizer
+                    optimizer.zero_grad()
+
+                    # Perform backward pass and update the parameters for the single flow
+                    loss.backward()
+                    optimizer.step()
+
+            total_loss /= len(state_samples)
+
+            if (epoch + 1) % 10 == 0:
+                print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {total_loss:.4f}')
+
+
+
+
+    ####### TRAINING MULTIPLE FLOWS AT THE SAME TIME ################
+    def reinforce_flow(self, state_samples, input_samples, optimization_opt_list=None):
+        # Create a list of optimizers, one for each flow
+        optimizers = [torch.optim.Adam(flow.parameters(), lr=1e-3) for flow in self.flow_array]
+
+        # Train all flows simultaneously
+        self.train_nf(state_samples=state_samples,
+                    input_samples=input_samples,
+                    optimizers=optimizers)
+
+    def train_nf(self, state_samples, input_samples, optimizers):
+        num_epochs = 100
+        for epoch in range(num_epochs):
+            losses = [[] for _ in range(self.num_gp)]
+            
+            for trajectory, input_trajectory in zip(state_samples, input_samples):
+                for i in range(1, len(trajectory)):
+                    next_state = trajectory[i]
+                    cur_state = trajectory[i - 1]
+                    cur_input = input_trajectory[i - 1]
+                    pred_state = self.get_next_state(cur_state, cur_input, flow_flag=True)
+
+                    # Calculate the loss for each dimension
+                    for gp_index in range(self.num_gp):
+                        loss = torch.nn.MSELoss()(pred_state[gp_index], next_state[gp_index])
+                        losses[gp_index].append(loss)
+
+            # Zero the gradients for all optimizers
+            for optimizer in optimizers:
+                optimizer.zero_grad()
+
+            # Calculate the mean loss, perform backward pass, and update the parameters for each flow
+            for gp_index, optimizer in enumerate(optimizers):
+                mean_loss = torch.stack(losses[gp_index]).mean()
+                mean_loss.backward(retain_graph=True)
+                optimizer.step()
+
+                if (epoch + 1) % 10 == 0:
+                    print(f'GP Index [{gp_index}], Epoch [{epoch + 1}/{num_epochs}], Loss: {mean_loss.item():.4f}')
+    
+
+    ## I don't think we need pretrain_nf, because reinforce_nf basically does this
+    # def pretrain_nf(self): 
+    #     '''
+    #     It would make sense that to pretrain we just asd 
+    #     '''
+    #     self.train_nf()
+    
 
     def pretrain_gp(self, gp_index):
         """
@@ -228,7 +323,7 @@ class Model_learning(torch.nn.Module):
         print('MSE gp '+str(gp_index)+': ', torch.mean((self.gp_output_list[gp_index]-Y_hat)**2))
 
 
-    def get_next_state(self, current_state, current_input, particle_pred = True):
+    def get_next_state(self, current_state, current_input, particle_pred = True, flow_flag = False):
         """
         Predict the next state given the the current state-input (batches supported).
         Method returns next state samples, together with mean and variance of the gp prediction
@@ -246,7 +341,6 @@ class Model_learning(torch.nn.Module):
 
         
         # ############# With a FLOW #######################
-        # NOT CORRECT PLACEMENT
         # # gp_inputs: state, action values
         # # gp_outputs_list: predicted next state values for each of the Gaussian processes
         # # gp_output_mean_list: the mean predictions for the next state values.
@@ -256,24 +350,53 @@ class Model_learning(torch.nn.Module):
         # # each Gaussian process is used to model a different output dimension, we need to apply a separate normalizing flow transformation to the
         # # output of each Gaussian process to map it to the desired distribution. 
         # # Transform the predicted next state distributions with a normalizing flow
-        # if with_flow: 
-        #     gp_outputs_list_transformed = []
-        #     for i in range(self.num_gp):
-        #         gp_outputs = gp_outputs_list[i]
-        #         transformed_gp_outputs, _ = self.flow_list[i](gp_outputs)
-        #         gp_outputs_list_transformed.append(transformed_gp_outputs)
-
         # ###################################################
 
         # Get the next state form gp IO and return
         # ONLY THE PARTICLES ARE EVER USED FROM THIS METHOD WE DO NOT NEED MEAN / VAR AGAIN
         # rollout_trj[t:t+1,:], _, _ = self.model_learning.get_next_state
         # next_states, delta_mean, delta_var= self.get_next_state_from_gp_output
-        return self.get_next_state_from_gp_output(current_state = current_state,
+        next_states, delta_mean, delta_var, delta_sample = self.get_next_state_from_gp_output(current_state = current_state,
                                                   current_input = current_input,
                                                   gp_output_mean_list = gp_output_mean_list,
                                                   gp_output_var_list = gp_output_var_list,
                                                   particle_pred = particle_pred)
+        
+        ''' TODO: Implement a call to conditional normalizing flow, flow should take in the 
+        '''
+        if flow_flag:
+
+            ######IF SINGLE FLOW#######
+
+            # nf = self.flow
+            # f0 = delta_sample
+
+            # # Prepare external data tensor
+            # mean_tensor = torch.stack(gp_output_mean_list, dim=0)
+            # var_tensor = torch.stack(gp_output_var_list, dim=0)
+            # external_data = torch.stack([mean_tensor, var_tensor], dim=-1)
+
+            # # Transform the delta_sample with the CONDITIONAL normalizing flow
+            # transformed_delta_sample = nf.forward(f0, external_data)
+
+            #####IF ONE FLOW PER STATE SPACE:#######
+            transformed_delta_sample = delta_sample.clone()
+
+            # Apply a separate normalizing flow for each dimension
+            for i in range(self.num_gp):
+                nf = self.flow_array[i]
+                f0 = delta_sample[i]
+
+                # Prepare external data tensor for the current dimension
+                external_data = torch.stack([gp_output_mean_list[i], gp_output_var_list[i]], dim=-1)
+
+                # Transform the delta_sample with the normalizing flow for the current dimension
+                transformed_delta_sample[i] = nf.forward(f0, external_data)
+
+       
+            # Add the transformed delta_sample to the current_state to obtain next_state
+            next_states = current_state + transformed_delta_sample
+        return next_states, delta_mean, delta_var #delta_mean/var could be NONE becasue rollouts doesn't use them 
     
         
     def get_one_step_gp_out(self, states, inputs):
@@ -294,7 +417,11 @@ class Model_learning(torch.nn.Module):
         Compute input-output of the gp and performs estimation:
         The function returns (gp_inputs, gp_outputs, gp_mean_hat, gp_var_hat)
         """
-        # check index list
+        # check index lis
+        # explain the variables below -->
+        # flg_pretrain: if True, pretrain the gp
+        # flg_onestep: if True, get one-step gp estimates
+        # gp_index_list: if None, use all gp
         if gp_index_list is None:
             gp_index_list = range(0,self.num_gp)
         if flg_onestep: # get one-step gp estimates
@@ -426,6 +553,7 @@ class Model_learning(torch.nn.Module):
         self.train_gp_likelihood(gp_index, optimization_opt_dict)
         if self.approximation_mode == 'SOR':
             print('\nSelect the SOR regressors...')
+            #no gradients in the training of the GP
             with torch.no_grad():
                 # permutation_indices = np.random.permutation(self.gp_inputs.shape[0])
                 permutation_indices = np.arange(0,self.gp_inputs.shape[0])
@@ -581,7 +709,7 @@ class Model_learning(torch.nn.Module):
 
         # return the next state and the delta distribution
         # Mason: What is the use of delta_mean/var if the distributions have been changed now!!
-        return next_states, delta_mean, delta_var
+        return next_states, delta_mean, delta_var, delta_sample # may also want to return the delta_sample
 
 
 class Model_learning_RBF(Model_learning):

@@ -24,8 +24,7 @@ def soft_resampler(particles, particle_probs, alpha, num_resampled, index=True, 
     # normalize
     # particle_probs = particle_probs / particle_probs.sum(dim=-1, keepdim=True)
     uniform_probs = torch.ones((batch_size, num_resampled)).to(device) / num_resampled
-
-    # build up sampling distribution q(s)
+     # build up sampling distribution q(s)
     if alpha < 1.0:
         # soft resampling
         q_probs = torch.stack((particle_probs * alpha, uniform_probs * (1.0 - alpha)), dim=-1).to(device)
