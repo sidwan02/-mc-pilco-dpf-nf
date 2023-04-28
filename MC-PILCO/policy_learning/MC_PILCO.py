@@ -160,6 +160,8 @@ class MC_PILCO(torch.nn.Module):
             print('\n\n----- REINFORCE THE MODEL -----')
             self.model_learning.reinforce_model(optimization_opt_list = model_optimization_opt_list)
             
+            self.flow_learning.buil
+            
             # TODO: add a new file called Model_flows.py within model_learning folder
             # This class will perform the normalizing flows stuff (and gradient update as is done in TGP, unchanged)
             # self.model_learning.reinforce_flows()

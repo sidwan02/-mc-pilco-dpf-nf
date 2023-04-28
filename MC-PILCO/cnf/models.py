@@ -1,16 +1,3 @@
-import torch
-from torch import nn
-from nf.models import NormalizingFlowModel_cond
-from torch.distributions import MultivariateNormal
-from utils import et_distance
-from nf.flows import *
-from nf.cglow.CGlowModel import CondGlowModel
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
-import torch
-import torch.nn as nn
-
-
 class NormalizingFlowModel_cond(nn.Module):
 
     def __init__(self, prior, flows, device='cuda'):
@@ -42,75 +29,63 @@ class NormalizingFlowModel_cond(nn.Module):
         x, _ = self.inverse(z,obser)
         return x
 
-def build_conditional_nf(n_sequence, hidden_size, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0):
-    flows = [RealNVP_cond(dim=state_dim, obser_dim=hidden_size) for _ in range(n_sequence)]
 
-    for f in flows:
-        f.zero_initialization(var=init_var)
+class RealNVP_cond(nn.Module):
 
-    prior_init = MultivariateNormal(torch.zeros(state_dim).to(device) + prior_mean,
-                                    torch.eye(state_dim).to(device) * prior_std**2)
+    def __init__(self, dim, hidden_dim = 8, base_network=FCNN, obser_dim=None):
+        super().__init__()
+        self.dim = dim
+        self.obser_dim=obser_dim
+        self.t1 = base_network(dim // 2+self.obser_dim, dim // 2, hidden_dim)
+        self.s1 = base_network(dim // 2+self.obser_dim, dim // 2, hidden_dim)
+        self.t2 = base_network(dim // 2+self.obser_dim, dim // 2, hidden_dim)
+        self.s2 = base_network(dim // 2+self.obser_dim, dim // 2, hidden_dim)
+    def zero_initialization(self,var=0.1):
+        for layer in self.t1.network:
+            if layer.__class__.__name__=='Linear':
+                nn.init.normal_(layer.weight,std=var)
+                # layer.weight.data.fill_(0)
+                layer.bias.data.fill_(0)
+        for layer in self.s1.network:
+            if layer.__class__.__name__=='Linear':
+                nn.init.normal_(layer.weight, std=var)
+                # layer.weight.data.fill_(0)
+                layer.bias.data.fill_(0)
+        for layer in self.t2.network:
+            if layer.__class__.__name__=='Linear':
+                nn.init.normal_(layer.weight, std=var)
+                # layer.weight.data.fill_(0)
+                layer.bias.data.fill_(0)
+        for layer in self.s2.network:
+            if layer.__class__.__name__=='Linear':
+                nn.init.normal_(layer.weight, std=var)
+                # layer.weight.data.fill_(0)
+                layer.bias.data.fill_(0)
+        # for param in self.parameters():
+        #     param.requires_grad = False
 
-    cond_model = NormalizingFlowModel_cond(prior_init, flows, device=device)
+    def forward(self, x, obser):
+        lower, upper = x[:,:self.dim // 2], x[:,self.dim // 2:]
+        t1_transformed = self.t1(torch.cat([lower,obser],dim=-1))
+        s1_transformed = self.s1(torch.cat([lower,obser],dim=-1))
+        upper = t1_transformed + upper * torch.exp(s1_transformed)
+        t2_transformed = self.t2(torch.cat([upper,obser],dim=-1))
+        s2_transformed = self.s2(torch.cat([upper,obser],dim=-1))
+        lower = t2_transformed + lower * torch.exp(s2_transformed)
+        z = torch.cat([lower, upper], dim=1)
+        log_det = torch.sum(s1_transformed, dim=1) + \
+                  torch.sum(s2_transformed, dim=1)
+        return z, log_det
 
-    return cond_model
-
-def normalising_flow_propose(cond_model, particles_pred, obs, flow=RealNVP_cond, n_sequence=2, hidden_dimension=8, obser_dim=None):
-
-    # theres are not trajectories --> how do we handle this
-    # this is the samples we take --> we have to sample from y_train for each
-    # these particles will be sampled
-    B, N, dimension = particles_pred.shape
-
-    #output of the gaussian process mean,var 
-    pred_particles_mean, pred_particles_std = particles_pred.mean(dim=1, keepdim=True).detach().clone().repeat([1, N, 1]), \
-                                            particles_pred.std(dim=1, keepdim=True).detach().clone().repeat([1, N, 1])
-    
-    
-    #this is what we change to the mean_variance of the next_state from the GP output
-    dyn_particles_mean_flatten, dyn_particles_std_flatten = pred_particles_mean.reshape(-1, dimension), pred_particles_std.reshape(-1, dimension)
-    
-    #context = mean_next, var_next, action
-    action_list = torch.randint(low=0, high=10, size=(640, 1)) #replace with actions in actual environment
-    context = torch.cat([dyn_particles_mean_flatten, dyn_particles_std_flatten,action_list], dim=-1)
-    
-    
-    #particles_pred = (particles_pred - pred_particles_mean) / pred_particles_std
-    particles_pred_flatten=particles_pred.reshape(-1,dimension)
-
-    #observation will be the current state
-    #we can just make the observations be the current state
-    # predicted, current, state, action, pairs
-    obs_reshape_og = obs.reshape(-1, dimension)
-    print("obs_reshape before concat shape:", obs_reshape_og.shape)
-
-    #obs_reshape_og = obs[:, None, :].repeat([1,N,1]).reshape(B*N,-1)
-
-    #mean,variance of the next_states concatonated with current state,action
-    #we also want to include the action as well
-    obs_reshape = torch.cat([obs_reshape_og, context], dim=-1)
-
-    print("particles_pred shape:", particles_pred.shape)
-    print("observation shape:", obs.shape)
-    print("action shape:", action_list.shape)
-
-    print("pred_particles_mean shape:", pred_particles_mean.shape)
-    print("pred_particles_std shape:", pred_particles_std.shape)
-    print("dyn_particles_mean_flatten shape:", dyn_particles_mean_flatten.shape)
-    print("dyn_particles_std_flatten shape:", dyn_particles_std_flatten.shape)
-    print("context shape:", context.shape)
-    print("particles_pred_flatten shape:", particles_pred_flatten.shape)
-    print("obs_reshape shape:", obs_reshape.shape)
-
-
-    #particles_pred are the samples from our priors, we do not call self.prior
-    #inverse
-    particles_update_nf, log_det=cond_model.inverse(particles_pred_flatten, obs_reshape)
-
-    jac=-log_det
-    jac=jac.reshape(particles_pred.shape[:2])
-
-    particles_update_nf=particles_update_nf.reshape(particles_pred.shape)
-    #particles_update_nf = particles_update_nf * pred_particles_std + pred_particles_mean
-
-    return particles_update_nf, jac
+    def inverse(self, z, obser):
+        lower, upper = z[:,:self.dim // 2], z[:,self.dim // 2:]
+        t2_transformed = self.t2(torch.cat([upper,obser],dim=-1))
+        s2_transformed = self.s2(torch.cat([upper,obser],dim=-1))
+        lower = (lower - t2_transformed) * torch.exp(-s2_transformed)
+        t1_transformed = self.t1(torch.cat([lower,obser],dim=-1))
+        s1_transformed = self.s1(torch.cat([lower,obser],dim=-1))
+        upper = (upper - t1_transformed) * torch.exp(-s1_transformed)
+        x = torch.cat([lower, upper], dim=1)
+        log_det = torch.sum(-s1_transformed, dim=1) + \
+                  torch.sum(-s2_transformed, dim=1)
+        return x, log_det
