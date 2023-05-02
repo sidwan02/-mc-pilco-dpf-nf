@@ -24,109 +24,83 @@ class Flows_learning(torch.nn.Module):
         self.optimizer = torch.optim.Adam(cnf.parameters(), lr=0.001)
         self.loss_function = nll_loss
 
-    def normalizing_flow_propose(self, particles_pred, obs, n_sequence=2, hidden_dimension=8, obser_dim=None):
+    def normalizing_flow_propose(self, pred_particles, pred_particles_mean, pred_particles_var, pred_particles_inputs, n_sequence=2, hidden_dimension=8, obser_dim=None):
 
         # theres are not trajectories --> how do we handle this
         # this is the samples we take --> we have to sample from y_train for each
         # these particles will be sampled
-        B, N, dimension = particles_pred.shape
-
-        #output of the gaussian process mean,var 
-        pred_particles_mean, pred_particles_std = particles_pred.mean(dim=1, keepdim=True).detach().clone().repeat([1, N, 1]), \
-                                                particles_pred.std(dim=1, keepdim=True).detach().clone().repeat([1, N, 1])
-        
+        B, N, dimension = pred_particles.shape
         
         #this is what we change to the mean_variance of the next_state from the GP output
-        dyn_particles_mean_flatten, dyn_particles_std_flatten = pred_particles_mean.reshape(-1, dimension), pred_particles_std.reshape(-1, dimension)
+        dyn_particles_mean_flatten, dyn_particles_var_flatten = pred_particles_mean.reshape(-1, dimension), pred_particles_var.reshape(-1, dimension)
         
         #context = mean_next, var_next, action
-        action_list = torch.randint(low=0, high=10, size=(640, 1)) #replace with actions in actual environment
-        context = torch.cat([dyn_particles_mean_flatten, dyn_particles_std_flatten,action_list], dim=-1)
+        context = torch.cat([dyn_particles_mean_flatten, dyn_particles_var_flatten, pred_particles_inputs], dim=-1)
         
-        
-        #particles_pred = (particles_pred - pred_particles_mean) / pred_particles_std
-        particles_pred_flatten=particles_pred.reshape(-1,dimension)
+        #pred_particles = (pred_particles - pred_particles_mean) / pred_particles_var
+        pred_particles_flatten=pred_particles.reshape(-1,dimension)
 
-        #observation will be the current state
-        #we can just make the observations be the current state
-        # predicted, current, state, action, pairs
-        obs_reshape_og = obs.reshape(-1, dimension)
-        print("obs_reshape before concat shape:", obs_reshape_og.shape)
-
-        #obs_reshape_og = obs[:, None, :].repeat([1,N,1]).reshape(B*N,-1)
-
-        #mean,variance of the next_states concatonated with current state,action
-        #we also want to include the action as well
-        obs_reshape = torch.cat([obs_reshape_og, context], dim=-1)
-
-        print("particles_pred shape:", particles_pred.shape)
-        print("observation shape:", obs.shape)
-        print("action shape:", action_list.shape)
+        print("pred_particles shape:", pred_particles.shape)
 
         print("pred_particles_mean shape:", pred_particles_mean.shape)
-        print("pred_particles_std shape:", pred_particles_std.shape)
+        print("pred_particles_var shape:", pred_particles_var.shape)
         print("dyn_particles_mean_flatten shape:", dyn_particles_mean_flatten.shape)
-        print("dyn_particles_std_flatten shape:", dyn_particles_std_flatten.shape)
+        print("dyn_particles_var_flatten shape:", dyn_particles_var_flatten.shape)
         print("context shape:", context.shape)
-        print("particles_pred_flatten shape:", particles_pred_flatten.shape)
+        print("pred_particles_flatten shape:", pred_particles_flatten.shape)
         print("obs_reshape shape:", obs_reshape.shape)
 
 
-        #particles_pred are the samples from our priors, we do not call self.prior
+        #pred_particles are the samples from our priors, we do not call self.prior
         #inverse
-        particles_update_nf, log_det=self.cond_model.inverse(particles_pred_flatten, obs_reshape)
+        particles_update_nf, log_det=self.cond_model.inverse(pred_particles_flatten, obs_reshape)
 
         jac=-log_det
-        jac=jac.reshape(particles_pred.shape[:2])
+        jac=jac.reshape(pred_particles.shape[:2])
 
-        particles_update_nf=particles_update_nf.reshape(particles_pred.shape)
-        #particles_update_nf = particles_update_nf * pred_particles_std + pred_particles_mean
+        particles_update_nf=particles_update_nf.reshape(pred_particles.shape)
+        #particles_update_nf = particles_update_nf * pred_particles_var + pred_particles_mean
 
         return particles_update_nf, jac
     
-    def reinforce_flows(self, optimization_opt_list = None):
+    def reinforce_flows(self, particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence):
         """
-        Optimize cnf
+        Optimize cnf + pretrain cnf
         optimization_opt_list is a list collecting dictionaries with the optimization options
         """
-        #initialize the GP models
-        self.init_gp_models()
-        # train each gp
-        for gp_index in range(0,self.num_gp):
-            self.train_gp(gp_index = gp_index,
-                          optimization_opt_dict = optimization_opt_list[gp_index])
-            
-            # pretrain each gp (compute alpha, m_X and K_X_inv)
-            # our flow pretraining will NEED gradients 
-            with torch.no_grad():
-                self.pretrain_gp(gp_index = gp_index)
+        #CNF NN has already been initialized when init Flows_learning class
+        
+        # pretrain flows
+        with torch.no_grad():
+            self.train_flows(particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence)
     
-    def pretrain_flows(self):
-        return None
-
-    def train_flows(self, particles_states_sequence, particles_states_sequence_mean, particles_inputs_sequence):
-        training_set = Dataset(particles_states_sequence, particles_states_sequence_mean, particles_inputs_sequence)
+    def train_flows(self, particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence):
+        training_set = Dataset(particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence)
+        
         params = {'batch_size': 64,
           'shuffle': True,
           'num_workers': 6}
         training_generator = torch.utils.data.DataLoader(training_set, **params)
         
+        loss_history = []
         for epoch in range(self.epochs):
             for batch_idx, (particles_state, particles_state_mean, particles_state_var, particles_obs, particles_inputs) in enumerate(training_generator):
                 # Zero the gradients from the previous iteration
                 self.optimizer.zero_grad()
 
                 # Call the normalising_flow_propose function with the current batch data
-                particles_update_nf, jac = self.normalising_flow_propose(cnf, particles_pred, observations)
+                particles_update_nf, jac = self.normalizing_flow_propose(particles_state, particles_state_mean, particles_state_var, particles_obs, particles_inputs)
 
                 # Step 3: Calculate the loss and backpropagate the gradients
                 # the prior is going to change !!!! it will be the prior from the gaussian!!
                 #prior_distribution = torch.distributions.MultivariateNormal(torch.zeros(state_dim), torch.eye(state_dim))
 
-                
                 prior_distribution = MultivariateNormal(torch.zeros(state_dim), torch.eye(state_dim))
                 loss = self.loss_function(particles_update_nf, jac, prior_distribution)  # Modify this line to calculate the loss using your loss function
                 loss.backward()
                 self.optimizer.step()
+                
+                with torch.no_grad():
+                    loss_history.append(loss.cpu())
 
             print(f'Epoch {epoch + 1}/{epochs} - Loss: {loss.item()}')

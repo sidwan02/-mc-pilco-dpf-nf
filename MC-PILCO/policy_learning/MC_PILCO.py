@@ -115,6 +115,9 @@ class MC_PILCO_CNF(torch.nn.Module):
         # get initial data
         if not loaded_model:
             print('\n\n\n\n----------------- INITIAL EXPLORATIONS -----------------')
+            init_particles_state_sequence = []
+            init_particles_input_sequence = []
+            
             # perform 'num_explorations' interactions with the system to learn initial model
             for expl_index in range(0,num_explorations):
                 print('\nEXPLORATION # '+str(expl_index))
@@ -131,10 +134,15 @@ class MC_PILCO_CNF(torch.nn.Module):
                     x0 = initial_state
 
                 # interact with the system
-                self.get_data_from_system(initial_state = x0,
+                state_samples, input_samples = self.get_data_from_system(initial_state = x0,
                                           T_exploration = T_exploration,
                                           flg_exploration = True, # exploration interaction
                                           trial_index = expl_index)
+                
+                init_particles_state_sequence.append(state_samples)
+                init_particles_input_sequence.append(input_samples)
+                
+                
             cost_trial_list = []
             std_cost_trial_list = []
             parameters_trial_list = []
@@ -169,7 +177,8 @@ class MC_PILCO_CNF(torch.nn.Module):
             self.model_learning.reinforce_model(optimization_opt_list = model_optimization_opt_list)
             
             # TODO: reinforce the flows (pretrain the flows)
-            self.flows_learning.reinforce_flows(optimization_opt_list = flows_optimization_opt_list)
+            # the initial_state and the mean are 0s (see test cartpole.py)
+            self.flows_learning.reinforce_flows(init_particles_state_sequence, np.repeat([initial_state], num_explorations, axis=0), np.repeat([initial_state_var], num_explorations, axis=0), init_particles_inputs_sequence)
             
             with torch.no_grad():
                 if self.log_path is not None:
@@ -425,7 +434,7 @@ class MC_PILCO_CNF(torch.nn.Module):
             # repeat 'apply_policy' if nan is obtained
             while num_attempts < 10  and flg_nan:
                 # apply the policy in simulation
-                states_sequence_NODROP, inputs_sequence_NODROP = self.apply_policy(particles_initial_state_mean = particles_initial_state_mean,
+                states_sequence_NODROP, states_mean_sequence_NODROP, states_var_sequence_NODROP, inputs_sequence_NODROP = self.apply_policy(particles_initial_state_mean = particles_initial_state_mean,
                                                                                    particles_initial_state_var = particles_initial_state_var,
                                                                                    flg_particles_init_uniform = flg_particles_init_uniform,
                                                                                    flg_particles_init_multi_gauss = flg_particles_init_multi_gauss,
@@ -444,7 +453,7 @@ class MC_PILCO_CNF(torch.nn.Module):
                     flg_nan = False
                     
             # TODO: train the flows using the data
-            self.flows_learning.train_flows(particles_states_sequence, particles_states_sequence_mean, particles_inputs_sequence)
+            self.flows_learning.train_flows(states_sequence_NODROP, states_mean_sequence_NODROP, states_var_sequence_NODROP, inputs_sequence_NODROP)
 
         # initilize filters 
         ES1_diff_cost = torch.zeros(num_opt_steps+1,device = self.device, dtype = self.dtype)
@@ -473,7 +482,8 @@ class MC_PILCO_CNF(torch.nn.Module):
             # repeat 'apply_policy' if nan is obtained
             while num_attempts < 10  and flg_nan:
                 # apply the policy
-                states_sequence, inputs_sequence = self.apply_policy(particles_initial_state_mean = particles_initial_state_mean,
+                # input is ths state action
+                states_sequence, states_mean_sequence, states_var_sequence, inputs_sequence = self.apply_policy(particles_initial_state_mean = particles_initial_state_mean,
                                                                      particles_initial_state_var = particles_initial_state_var,
                                                                      flg_particles_init_uniform = flg_particles_init_uniform,
                                                                      flg_particles_init_multi_gauss = flg_particles_init_multi_gauss,
@@ -491,7 +501,7 @@ class MC_PILCO_CNF(torch.nn.Module):
                     flg_nan = False
                     
                 # TODO: train the flows using the data
-                self.flows_learning.train_flows(particles_states_sequence, particles_states_sequence_mean, particles_inputs_sequence)
+                self.flows_learning.train_flows(states_sequence, states_mean_sequence, states_var_sequence, inputs_sequence)
 
             # save current step's cost
             cost_list[opt_step] = cost.data.clone().detach()
@@ -617,6 +627,8 @@ class MC_PILCO_CNF(torch.nn.Module):
         # initialize variables
         states_sequence_list = []
         inputs_sequence_list = []
+        states_mean_sequence_list = []
+        states_var_sequence_list = []
         
         # this looks like the only place variance of particles is sampled
         # get initial particles
@@ -648,19 +660,20 @@ class MC_PILCO_CNF(torch.nn.Module):
 
             # get next state mean and variance (given the states sampled and the inputs computed)
             
-            particles, _, _ = self.model_learning.get_next_state(current_state = states_sequence_list[t-1],
+            particles, partices_mean, particles_var = self.model_learning.get_next_state(current_state = states_sequence_list[t-1],
                                                                  current_input = inputs_sequence_list[t-1])
             
             # TODO: also maintain list of the particle mean and variance
-            
+            states_mean_sequence_list.append(particles_mean)
+            states_var_sequence_list.append(particles_var)
             
             states_sequence_list.append(particles)
 
             # compute next input
             inputs_sequence_list.append(self.control_policy(states_sequence_list[t], t = t, p_dropout = p_dropout))
 
-        # returns states/inputs trajectories
-        return torch.stack(states_sequence_list), torch.stack(inputs_sequence_list)
+        # returns states/inputs trajectories, mean, var
+        return torch.stack(states_sequence_list), torch.stack(states_mean_sequence_list), torch.stack(states_var_sequence_list), torch.stack(inputs_sequence_list)
 
 
     def get_data_from_system(self, initial_state, T_exploration, trial_index, flg_exploration=False):
@@ -686,6 +699,8 @@ class MC_PILCO_CNF(torch.nn.Module):
         # add data to model_learning object
         self.model_learning.add_data(new_state_samples = state_samples,
                                      new_input_samples = input_samples)
+        
+        return state_samples, input_samples
 
     def load_policy_from_log(self, num_trial, folder='results_tmp/1/'):
         """
