@@ -4,12 +4,13 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 from torch.distributions.multivariate_normal import MultivariateNormal
 from models import *
 from loss import nll_loss
+from dataset import Dataset
 
-class Flow_learning(torch.nn.Module):
+class Flows_learning(torch.nn.Module):
     # builds conditional nf
     # sets params for training
     def __init__(self, n_sequence, hidden_size, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0):
-        super(Flow_learning, self).__init__()
+        super(Flows_learning, self).__init__()
         flows = [RealNVP_cond(dim=state_dim, obser_dim=hidden_size) for _ in range(n_sequence)]
 
         for f in flows:
@@ -82,10 +83,19 @@ class Flow_learning(torch.nn.Module):
         #particles_update_nf = particles_update_nf * pred_particles_std + pred_particles_mean
 
         return particles_update_nf, jac
+    
+    def pretrain_flows(self):
+        return None
 
-    def train(self):
+    def train_flows(self, particles_states_sequence, particles_states_sequence_mean, particles_inputs_sequence):
+        training_set = Dataset(particles_states_sequence, particles_states_sequence_mean, particles_inputs_sequence)
+        params = {'batch_size': 64,
+          'shuffle': True,
+          'num_workers': 6}
+        training_generator = torch.utils.data.DataLoader(training_set, **params)
+        
         for epoch in range(self.epochs):
-            for batch_idx, (particles_pred, observations) in enumerate(train_loader):
+            for batch_idx, (particles_state, particles_state_mean, particles_state_var, particles_obs, particles_inputs) in enumerate(training_generator):
                 # Zero the gradients from the previous iteration
                 self.optimizer.zero_grad()
 

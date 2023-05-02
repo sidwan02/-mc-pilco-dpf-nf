@@ -162,10 +162,6 @@ class MC_PILCO(torch.nn.Module):
             
             self.flow_learning.buil
             
-            # TODO: add a new file called Model_flows.py within model_learning folder
-            # This class will perform the normalizing flows stuff (and gradient update as is done in TGP, unchanged)
-            # self.model_learning.reinforce_flows()
-            
             with torch.no_grad():
                 if self.log_path is not None:
                     print('Save log file...')
@@ -481,6 +477,9 @@ class MC_PILCO(torch.nn.Module):
                     print('\nCost is NaN: try sampling again')
                 else:
                     flg_nan = False
+                    
+                # use the output of the GP on all states to train the CNF
+                self.flows_learning.train()
 
             # save current step's cost
             cost_list[opt_step] = cost.data.clone().detach()
@@ -639,6 +638,9 @@ class MC_PILCO(torch.nn.Module):
             
             particles, _, _ = self.model_learning.get_next_state(current_state = states_sequence_list[t-1],
                                                                  current_input = inputs_sequence_list[t-1])
+            
+            # TODO: also maintain list of the particle mean and variance
+            
             states_sequence_list.append(particles)
 
             # compute next input
