@@ -84,6 +84,23 @@ class Flows_learning(torch.nn.Module):
 
         return particles_update_nf, jac
     
+    def reinforce_flows(self, optimization_opt_list = None):
+        """
+        Optimize cnf
+        optimization_opt_list is a list collecting dictionaries with the optimization options
+        """
+        #initialize the GP models
+        self.init_gp_models()
+        # train each gp
+        for gp_index in range(0,self.num_gp):
+            self.train_gp(gp_index = gp_index,
+                          optimization_opt_dict = optimization_opt_list[gp_index])
+            
+            # pretrain each gp (compute alpha, m_X and K_X_inv)
+            # our flow pretraining will NEED gradients 
+            with torch.no_grad():
+                self.pretrain_gp(gp_index = gp_index)
+    
     def pretrain_flows(self):
         return None
 
