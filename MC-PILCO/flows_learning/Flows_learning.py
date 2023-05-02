@@ -9,7 +9,7 @@ from dataset import Dataset
 class Flows_learning(torch.nn.Module):
     # builds conditional nf
     # sets params for training
-    def __init__(self, n_sequence, hidden_size, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0):
+    def __init__(self, n_sequence, hidden_size, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0, device=torch.float64, dtype=torch.device('cpu')):
         super(Flows_learning, self).__init__()
         flows = [RealNVP_cond(dim=state_dim, obser_dim=hidden_size) for _ in range(n_sequence)]
 

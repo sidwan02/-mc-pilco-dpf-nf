@@ -169,7 +169,7 @@ class MC_PILCO_CNF(torch.nn.Module):
             self.model_learning.reinforce_model(optimization_opt_list = model_optimization_opt_list)
             
             # TODO: reinforce the flows (pretrain the flows)
-            self.flow_learning.reinforce_flows(optimization_opt_list = flows_optimization_opt_list)
+            self.flows_learning.reinforce_flows(optimization_opt_list = flows_optimization_opt_list)
             
             with torch.no_grad():
                 if self.log_path is not None:
@@ -652,6 +652,8 @@ class MC_PILCO_CNF(torch.nn.Module):
                                                                  current_input = inputs_sequence_list[t-1])
             
             # TODO: also maintain list of the particle mean and variance
+            
+            
             states_sequence_list.append(particles)
 
             # compute next input
