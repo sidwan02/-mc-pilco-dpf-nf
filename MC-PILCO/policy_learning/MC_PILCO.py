@@ -52,6 +52,8 @@ class MC_PILCO_CNF(torch.nn.Module):
             std_meas_noise = np.zeros(state_dim)
         self.std_meas_noise = std_meas_noise # measurement noise
         # get the model learning object
+
+        #MASON --> if there are hyper-params for NF then we will need them here, else hardcode
         print('\n\nGet the learning object...')
         self.model_learning = f_model_learning(**model_learning_par)
         
@@ -174,10 +176,12 @@ class MC_PILCO_CNF(torch.nn.Module):
             # train GPs on observed interaction data
             # MASON -->
             # THIS IS THE METHOD THAT WE NEED TO CHANGE NOW --> WE HAVE A FLOW AND THIS MUST BE UPDATED
-            
+
             print('\n\n----- REINFORCE THE MODEL -----')
+            #make a flow_flag and set it to False (no flows here yet)
             self.model_learning.reinforce_model(optimization_opt_list = model_optimization_opt_list)
             
+            print('\n\n----- REINFORCE FLOWS -----')
             # CHANGE: reinforce the flows (pretrain the flows)
             # the initial_state and the mean are 0s (see test cartpole.py)
             # TODO: might need to convert input to tensors, figure out if dimensions are correct (and if to use tensor.stack as is done in apply_policy)
@@ -257,7 +261,9 @@ class MC_PILCO_CNF(torch.nn.Module):
                 x0 = initial_state
 
             print('\n\n----- APPLY THE CONTROL POLICY -----')
+
             # interact with the system
+            # 
             self.get_data_from_system(initial_state = x0,
                                       T_exploration = T_control,
                                       flg_exploration = False, # control policy interaction
@@ -702,7 +708,9 @@ class MC_PILCO_CNF(torch.nn.Module):
         self.input_samples_history.append(input_samples)
         self.noiseless_states_history.append(noiseless_samples)
         self.num_data_collection += 1
+
         # add data to model_learning object
+        # the same samples are ain the state_samples and input_samples
         self.model_learning.add_data(new_state_samples = state_samples,
                                      new_input_samples = input_samples)
         

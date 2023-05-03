@@ -41,6 +41,7 @@ def get_SOR_GP(exact_GP_object):
 
 
     # create the SOR_GP class dynamically
+    
     class SOR_GP(type(exact_GP_object)):
         """
         SUBSET OF REGRESSORS APPROXIMATION
