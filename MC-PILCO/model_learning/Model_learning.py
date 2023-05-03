@@ -227,7 +227,7 @@ class Model_learning(torch.nn.Module):
         print('MSE gp '+str(gp_index)+': ', torch.mean((self.gp_output_list[gp_index]-Y_hat)**2))
 
 
-    def get_next_state(self, current_state, current_input, particle_pred = True, flow_flag = False):
+    def get_next_state(self, current_state, current_input, particle_pred = True):
         """
         Predict the next state given the the current state-input (batches supported).
         Method returns next state samples, together with mean and variance of the gp prediction
@@ -260,47 +260,11 @@ class Model_learning(torch.nn.Module):
         # ONLY THE PARTICLES ARE EVER USED FROM THIS METHOD WE DO NOT NEED MEAN / VAR AGAIN
         # rollout_trj[t:t+1,:], _, _ = self.model_learning.get_next_state
         # next_states, delta_mean, delta_var= self.get_next_state_from_gp_output
-        next_states, delta_mean, delta_var, delta_sample = self.get_next_state_from_gp_output(current_state = current_state,
+        return self.get_next_state_from_gp_output(current_state = current_state,
                                                   current_input = current_input,
                                                   gp_output_mean_list = gp_output_mean_list,
                                                   gp_output_var_list = gp_output_var_list,
                                                   particle_pred = particle_pred)
-        
-        ''' TODO: Implement a call to conditional normalizing flow, flow should take in the 
-        '''
-        if flow_flag:
-
-            ######IF SINGLE FLOW#######
-
-            # nf = self.flow
-            # f0 = delta_sample
-
-            # # Prepare external data tensor
-            # mean_tensor = torch.stack(gp_output_mean_list, dim=0)
-            # var_tensor = torch.stack(gp_output_var_list, dim=0)
-            # external_data = torch.stack([mean_tensor, var_tensor], dim=-1)
-
-            # # Transform the delta_sample with the CONDITIONAL normalizing flow
-            # transformed_delta_sample = nf.forward(f0, external_data)
-
-            #####IF ONE FLOW PER STATE SPACE:#######
-            transformed_delta_sample = delta_sample.clone()
-
-            # Apply a separate normalizing flow for each dimension
-            for i in range(self.num_gp):
-                nf = self.flow_array[i]
-                f0 = delta_sample[i]
-
-                # Prepare external data tensor for the current dimension
-                external_data = torch.stack([gp_output_mean_list[i], gp_output_var_list[i]], dim=-1)
-
-                # Transform the delta_sample with the normalizing flow for the current dimension
-                transformed_delta_sample[i] = nf.forward(f0, external_data)
-
-       
-            # Add the transformed delta_sample to the current_state to obtain next_state
-            next_states = current_state + transformed_delta_sample
-        return next_states, delta_mean, delta_var #delta_mean/var could be NONE becasue rollouts doesn't use them 
     
         
     def get_one_step_gp_out(self, states, inputs):
@@ -613,7 +577,7 @@ class Model_learning(torch.nn.Module):
 
         # return the next state and the delta distribution
         # Mason: What is the use of delta_mean/var if the distributions have been changed now!!
-        return next_states, delta_mean, delta_var, delta_sample # may also want to return the delta_sample
+        return next_states, delta_mean, delta_var # may also want to return the delta_sample
 
 
 class Model_learning_RBF(Model_learning):
