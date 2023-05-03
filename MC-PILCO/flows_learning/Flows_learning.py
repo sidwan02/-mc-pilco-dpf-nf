@@ -74,6 +74,12 @@ class Flows_learning(torch.nn.Module):
         with torch.no_grad():
             self.train_flows(particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence)
     
+    def get_next_state(self, gp_pred_next_state, gp_pred_next_state_mean, gp_pred_next_state_var, cur_input):
+        # TODO: dimensions might need to be sorted out (propose takes batch data)
+        particles_update_nf, _ = self.normalizing_flow_propose(gp_pred_next_state, gp_pred_next_state_mean, gp_pred_next_state_var, cur_input)
+        
+        return particles_update_nf
+    
     def train_flows(self, particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence):
         training_set = Dataset(particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence)
         

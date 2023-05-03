@@ -18,7 +18,7 @@ import torch
 import numpy as np
 import model_learning.Model_learning as ML
 
-# TODO: import flows model
+# CHANGE: import flows model
 import flows_learning.Flows_learning as FL
 
 import policy_learning.Policy as Policy
@@ -91,7 +91,7 @@ if fl_SOD_GP:
     
 FL.Flows_learning(n_sequence, hidden_size, state_dim)
     
-# TODO: define flows model
+# CHANGE: define flows model
 print('\n---- Set flows learning parameters ----')
 f_flows_learning = FL.Flows_learning # Flows function to be trained
 print(f_model_learning)
@@ -191,7 +191,7 @@ MC_PILCO_CNF_init_dict['std_meas_noise'] = np.array(std_list)
 MC_PILCO_CNF_init_dict['f_model_learning'] = f_model_learning # Model function to be trained
 MC_PILCO_CNF_init_dict['model_learning_par'] = model_learning_par # Model function parameters
 
-# TODO: add flows params
+# CHANGE: add flows params
 MC_PILCO_CNF_init_dict['f_flows_learning'] = f_flows_learning # Flows function to be trained
 MC_PILCO_CNF_init_dict['flows_learning_par'] = flows_learning_par # Flows function parameters
 

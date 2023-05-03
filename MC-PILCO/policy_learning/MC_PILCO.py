@@ -31,7 +31,7 @@ class MC_PILCO_CNF(torch.nn.Module):
     """
     def __init__(self, T_sampling, state_dim, input_dim, f_sim, 
                  f_model_learning, model_learning_par, 
-                #  TODO: add flows learning params
+                # CHANGE: add flows learning params
                  f_flows_learning, flows_learning_par,
                  f_rand_exploration_policy, rand_exploration_policy_par,
                  f_control_policy, control_policy_par,
@@ -55,7 +55,7 @@ class MC_PILCO_CNF(torch.nn.Module):
         print('\n\nGet the learning object...')
         self.model_learning = f_model_learning(**model_learning_par)
         
-        # TODO: get the flows learning object
+        # CHANGE: get the flows learning object
         print('\n\nGet the flows learning object...')
         self.flows_learning = f_flows_learning(**flows_learning_par)
         
@@ -115,6 +115,7 @@ class MC_PILCO_CNF(torch.nn.Module):
         # get initial data
         if not loaded_model:
             print('\n\n\n\n----------------- INITIAL EXPLORATIONS -----------------')
+            # CHANGE
             init_particles_state_sequence = []
             init_particles_input_sequence = []
             
@@ -139,6 +140,7 @@ class MC_PILCO_CNF(torch.nn.Module):
                                           flg_exploration = True, # exploration interaction
                                           trial_index = expl_index)
                 
+                # CHANGE
                 init_particles_state_sequence.append(state_samples)
                 init_particles_input_sequence.append(input_samples)
                 
@@ -176,8 +178,9 @@ class MC_PILCO_CNF(torch.nn.Module):
             print('\n\n----- REINFORCE THE MODEL -----')
             self.model_learning.reinforce_model(optimization_opt_list = model_optimization_opt_list)
             
-            # TODO: reinforce the flows (pretrain the flows)
+            # CHANGE: reinforce the flows (pretrain the flows)
             # the initial_state and the mean are 0s (see test cartpole.py)
+            # TODO: might need to convert input to tensors, figure out if dimensions are correct (and if to use tensor.stack as is done in apply_policy)
             self.flows_learning.reinforce_flows(init_particles_state_sequence, np.repeat([initial_state], num_explorations, axis=0), np.repeat([initial_state_var], num_explorations, axis=0), init_particles_inputs_sequence)
             
             with torch.no_grad():
@@ -230,7 +233,6 @@ class MC_PILCO_CNF(torch.nn.Module):
             particles_inputs_list.append(particles_inputs)
             parameters_trial_list.append(copy.deepcopy(self.control_policy.state_dict()))
 
-
             if self.log_path is not None:
                 print('Save log file...')
                 self.log_dict['cost_trial_list'] = cost_trial_list
@@ -268,7 +270,7 @@ class MC_PILCO_CNF(torch.nn.Module):
                 self.log_dict['noiseless_states_history'] = self.noiseless_states_history
                 pkl.dump(self.log_dict,open(self.log_path+'/log.pkl','wb'))
 
-
+            # TODO: test flows learning performance?
             print('\n\n----- CHECK THE MODEL LEARNING PERFORMANCE (before model update) -----')
             _, _, _, _ = self.get_model_learning_performance(data_collection_index = trial_index+1)
 
@@ -372,9 +374,13 @@ class MC_PILCO_CNF(torch.nn.Module):
             ## GAUSSIAN ASSUMPTION --> the way that we get next state
             # get next state --> WE NEED TO CHANGE THISSSSSSSSSS
             # MASON
-            rollout_trj[t:t+1,:], _, _ = self.model_learning.get_next_state(current_state = rollout_trj[t-1:t,:],
+            next_state, delta_mean, delta_var = self.model_learning.get_next_state(current_state = rollout_trj[t-1:t,:],
                                                                             current_input = inputs_trajectory_tc[t-1:t,:],
                                                                             particle_pred = particle_pred)
+            
+            # CHANGE: feed the GP output to cnf
+            rollout_trj[t:t+1,:] = self.flows_learning.get_next_state(next_state, delta_mean, delta_var, inputs_trajectory_tc[t-1:t,:])
+            
         return rollout_trj.detach().cpu().numpy()
 
 
@@ -452,7 +458,7 @@ class MC_PILCO_CNF(torch.nn.Module):
                 else:
                     flg_nan = False
                     
-            # TODO: train the flows using the data
+            # CHANGE: train the flows using the data
             self.flows_learning.train_flows(states_sequence_NODROP, states_mean_sequence_NODROP, states_var_sequence_NODROP, inputs_sequence_NODROP)
 
         # initilize filters 
@@ -500,7 +506,7 @@ class MC_PILCO_CNF(torch.nn.Module):
                 else:
                     flg_nan = False
                     
-                # TODO: train the flows using the data
+                # CHANGE: train the flows using the data
                 self.flows_learning.train_flows(states_sequence, states_mean_sequence, states_var_sequence, inputs_sequence)
 
             # save current step's cost
@@ -663,7 +669,7 @@ class MC_PILCO_CNF(torch.nn.Module):
             particles, partices_mean, particles_var = self.model_learning.get_next_state(current_state = states_sequence_list[t-1],
                                                                  current_input = inputs_sequence_list[t-1])
             
-            # TODO: also maintain list of the particle mean and variance
+            # CHANGE: also maintain list of the particle mean and variance
             states_mean_sequence_list.append(particles_mean)
             states_var_sequence_list.append(particles_var)
             
