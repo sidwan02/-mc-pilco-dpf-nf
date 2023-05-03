@@ -72,9 +72,6 @@ class Model_learning(torch.nn.Module):
         self.K_X_inv_list = [None]*num_gp
         self.gp_inputs_tr_list = [None]*num_gp
 
-        ########## MASON ##############
-        #self.flow = flow_model(input_dim, output_dim, num_flows) #create a NF class in pytorch --> initalize hyperparams
-
         # check approximation
         self.approximation_mode = approximation_mode
         if approximation_mode is None:
@@ -183,99 +180,6 @@ class Model_learning(torch.nn.Module):
             with torch.no_grad():
                 self.pretrain_gp(gp_index = gp_index)
 
-    ###########MASON################
-
-    #  will also need a pretrain_flow aspect to this as well
-    #  this will only be called once (at beginning of training)
-    def reinforce_flow(self, state_samples, input_samples, optimization_opt_dict=None):
-        # Create an optimizer for the single flow
-        optimizer = torch.optim.Adam(self.flow.parameters(), lr=1e-3)
-
-        # Train the single flow
-        self.train_nf(state_samples=state_samples,
-                    input_samples=input_samples,
-                    optimizer=optimizer)
-
-    # SINGLE FLOW TRAINING
-    def train_nf(self, state_samples, input_samples, optimizer):
-        num_epochs = 100
-        for epoch in range(num_epochs):
-            total_loss = 0
-
-            for trajectory, input_trajectory in zip(state_samples, input_samples):
-                for i in range(1, len(trajectory)):
-                    next_state = trajectory[i]
-                    cur_state = trajectory[i - 1]
-                    cur_input = input_trajectory[i - 1]
-                    pred_state = self.get_next_state(cur_state, cur_input, flow_flag=True)
-
-                    # Calculate the loss for the entire state space
-                    loss = torch.nn.MSELoss()(pred_state, next_state)
-                    total_loss += loss.item()
-
-                    # Zero the gradients for the optimizer
-                    optimizer.zero_grad()
-
-                    # Perform backward pass and update the parameters for the single flow
-                    loss.backward()
-                    optimizer.step()
-
-            total_loss /= len(state_samples)
-
-            if (epoch + 1) % 10 == 0:
-                print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {total_loss:.4f}')
-
-
-
-
-    ####### TRAINING MULTIPLE FLOWS AT THE SAME TIME ################
-    def reinforce_flow(self, state_samples, input_samples, optimization_opt_list=None):
-        # Create a list of optimizers, one for each flow
-        optimizers = [torch.optim.Adam(flow.parameters(), lr=1e-3) for flow in self.flow_array]
-
-        # Train all flows simultaneously
-        self.train_nf(state_samples=state_samples,
-                    input_samples=input_samples,
-                    optimizers=optimizers)
-
-    def train_nf(self, state_samples, input_samples, optimizers):
-        num_epochs = 100
-        for epoch in range(num_epochs):
-            losses = [[] for _ in range(self.num_gp)]
-            
-            for trajectory, input_trajectory in zip(state_samples, input_samples):
-                for i in range(1, len(trajectory)):
-                    next_state = trajectory[i]
-                    cur_state = trajectory[i - 1]
-                    cur_input = input_trajectory[i - 1]
-                    pred_state = self.get_next_state(cur_state, cur_input, flow_flag=True)
-
-                    # Calculate the loss for each dimension
-                    for gp_index in range(self.num_gp):
-                        loss = torch.nn.MSELoss()(pred_state[gp_index], next_state[gp_index])
-                        losses[gp_index].append(loss)
-
-            # Zero the gradients for all optimizers
-            for optimizer in optimizers:
-                optimizer.zero_grad()
-
-            # Calculate the mean loss, perform backward pass, and update the parameters for each flow
-            for gp_index, optimizer in enumerate(optimizers):
-                mean_loss = torch.stack(losses[gp_index]).mean()
-                mean_loss.backward(retain_graph=True)
-                optimizer.step()
-
-                if (epoch + 1) % 10 == 0:
-                    print(f'GP Index [{gp_index}], Epoch [{epoch + 1}/{num_epochs}], Loss: {mean_loss.item():.4f}')
-    
-
-    ## I don't think we need pretrain_nf, because reinforce_nf basically does this
-    # def pretrain_nf(self): 
-    #     '''
-    #     It would make sense that to pretrain we just asd 
-    #     '''
-    #     self.train_nf()
-    
 
     def pretrain_gp(self, gp_index):
         """
