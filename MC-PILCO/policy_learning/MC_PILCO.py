@@ -186,6 +186,7 @@ class MC_PILCO_CNF(torch.nn.Module):
             # CHANGE: reinforce the flows (pretrain the flows)
             # the initial_state and the mean are 0s (see test cartpole.py)
             # TODO: might need to convert input to tensors, figure out if dimensions are correct (and if to use tensor.stack as is done in apply_policy)
+            # TODO: the input dimensions need to be fixed
             self.flows_learning.reinforce_flows(init_particles_state_sequence, np.repeat([initial_state], num_explorations, axis=0), np.repeat([initial_state_var], num_explorations, axis=0), init_particles_input_sequence)
             
             with torch.no_grad():
@@ -385,13 +386,16 @@ class MC_PILCO_CNF(torch.nn.Module):
                                                                             current_input = inputs_trajectory_tc[t-1:t,:],
                                                                             particle_pred = particle_pred)
             
-            print(next_state)
-            print(delta_mean)
-            print(delta_var)
+            # print(next_state)
+            # print(delta_mean)
+            # print(delta_var)
             # baba
             
             # CHANGE: feed the GP output to cnf
+            # TODO: the dimensions here are awkward since next_state has current_state + delta_sample whereas the var and mean are only of the delta
             rollout_trj[t:t+1,:] = self.flows_learning.get_next_state(next_state, delta_mean, delta_var, inputs_trajectory_tc[t-1:t,:])
+            # rollout_trj[t:t+1,:] = next_state
+            
             
         return rollout_trj.detach().cpu().numpy()
 
@@ -470,7 +474,10 @@ class MC_PILCO_CNF(torch.nn.Module):
                 else:
                     flg_nan = False
                     
-            print(states_sequence_NODROP.shape())
+            print(states_sequence_NODROP.shape)
+            print(states_mean_sequence_NODROP.shape)
+            print(states_var_sequence_NODROP.shape)
+            print(inputs_sequence_NODROP.shape)
             baba
                     
             # CHANGE: train the flows using the data
@@ -673,6 +680,14 @@ class MC_PILCO_CNF(torch.nn.Module):
         
         # sample particles at t=0 from initial state distribution
         states_sequence_list.append(state_distribution.rsample())
+        
+        print(particles_initial_state_mean.shape)
+        print(particles_initial_state_var.shape)
+        # bobobbo
+        
+        # TODO: how do I add the initial mean and variance? The dimensions are awkward
+        states_mean_sequence_list.append(particles_initial_state_mean)
+        states_var_sequence_list.append(particles_initial_state_var)
 
         # compute initial inputs
         inputs_sequence_list.append(self.control_policy(states_sequence_list[0], t = 0, p_dropout = p_dropout))   
@@ -681,7 +696,7 @@ class MC_PILCO_CNF(torch.nn.Module):
 
             # get next state mean and variance (given the states sampled and the inputs computed)
             
-            particles, partices_mean, particles_var = self.model_learning.get_next_state(current_state = states_sequence_list[t-1],
+            particles, particles_mean, particles_var = self.model_learning.get_next_state(current_state = states_sequence_list[t-1],
                                                                  current_input = inputs_sequence_list[t-1])
             
             # CHANGE: also maintain list of the particle mean and variance

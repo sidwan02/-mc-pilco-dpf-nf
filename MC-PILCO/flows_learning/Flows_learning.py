@@ -80,21 +80,35 @@ class Flows_learning(torch.nn.Module):
         #CNF NN has already been initialized when init Flows_learning class
         
         # pretrain flows
+        print(particles_state_sequence.shape)
+        print(particles_state_mean_sequence.shape)
+        print(particles_state_var_sequence.shape)
+        print(particles_inputs_sequence.shape)
+        
         with torch.no_grad():
             self.train_flows(particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence)
     
     def get_next_state(self, gp_pred_next_state, gp_pred_next_state_mean, gp_pred_next_state_var, cur_input):
         # TODO: dimensions might need to be sorted out (propose takes batch data)
-        print(gp_pred_next_state)
+        # print(gp_pred_next_state)
         print(gp_pred_next_state.shape)
-        print(gp_pred_next_state_mean)
+        # print(gp_pred_next_state_mean)
         print(gp_pred_next_state_mean.shape)
-        # gogo
+        print(gp_pred_next_state_var.shape)
+        print(cur_input.shape)
+        
         particles_update_nf, _ = self.normalizing_flow_propose(np.expand_dims(gp_pred_next_state, axis=0), np.expand_dims(gp_pred_next_state_mean, axis=0), np.expand_dims(gp_pred_next_state_var, axis=0), np.expand_dims(cur_input, axis=0))
         
         return particles_update_nf
     
     def train_flows(self, particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence):
+        
+        print(particles_state_sequence.shape)
+        print(particles_state_mean_sequence.shape)
+        print(particles_state_var_sequence.shape)
+        print(particles_inputs_sequence.shape)
+        # hello
+        
         training_set = Dataset(particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence)
         
         params = {'batch_size': 64,
