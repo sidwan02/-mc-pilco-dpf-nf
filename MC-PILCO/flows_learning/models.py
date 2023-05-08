@@ -1,3 +1,5 @@
+from torch import nn
+
 class NormalizingFlowModel_cond(nn.Module):
 
     def __init__(self, prior, flows, device='cuda'):
@@ -28,6 +30,21 @@ class NormalizingFlowModel_cond(nn.Module):
         z = self.prior.sample((n_samples,)).to(self.device)
         x, _ = self.inverse(z,obser)
         return x
+
+class FCNN(nn.Module):
+
+    def __init__(self, in_dim, out_dim, hidden_dim):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, out_dim),
+        )
+
+    def forward(self, x):
+        return self.network(x.float())
 
 
 class RealNVP_cond(nn.Module):

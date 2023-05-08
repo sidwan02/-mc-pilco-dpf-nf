@@ -2,9 +2,11 @@ import torch
 from torch import nn
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 from torch.distributions.multivariate_normal import MultivariateNormal
-from models import *
-from loss import nll_loss
-from dataset import Dataset
+# this file run indirectly with cwd = /MC-PILCO so must have relative import to that dir
+from flows_learning.models import *
+from flows_learning.loss import nll_loss
+from flows_learning.dataset import Dataset
+import numpy as np
 
 class Flows_learning(torch.nn.Module):
     # builds conditional nf
@@ -21,7 +23,7 @@ class Flows_learning(torch.nn.Module):
 
         self.cond_model = NormalizingFlowModel_cond(prior_init, flows, device=device)
         self.epochs = 100
-        self.optimizer = torch.optim.Adam(cnf.parameters(), lr=0.001)
+        self.optimizer = torch.optim.Adam(self.cond_model.parameters(), lr=0.001)
         self.loss_function = nll_loss
 
     def normalizing_flow_propose(self, pred_particles, pred_particles_mean, pred_particles_var, pred_particles_inputs, n_sequence=2, hidden_dimension=8, obser_dim=None):
@@ -30,9 +32,16 @@ class Flows_learning(torch.nn.Module):
         # this is the samples we take --> we have to sample from y_train for each
         # these particles will be sampled
         B, N, dimension = pred_particles.shape
+        # print(B)
+        print(pred_particles.shape)
         
         #this is what we change to the mean_variance of the next_state from the GP output
         dyn_particles_mean_flatten, dyn_particles_var_flatten = pred_particles_mean.reshape(-1, dimension), pred_particles_var.reshape(-1, dimension)
+        
+        print(dyn_particles_mean_flatten.shape)
+        print(dyn_particles_var_flatten.shape)
+        
+        print(pred_particles_inputs.shape)
         
         #context = mean_next, var_next, action
         context = torch.cat([dyn_particles_mean_flatten, dyn_particles_var_flatten, pred_particles_inputs], dim=-1)
@@ -76,7 +85,12 @@ class Flows_learning(torch.nn.Module):
     
     def get_next_state(self, gp_pred_next_state, gp_pred_next_state_mean, gp_pred_next_state_var, cur_input):
         # TODO: dimensions might need to be sorted out (propose takes batch data)
-        particles_update_nf, _ = self.normalizing_flow_propose(gp_pred_next_state, gp_pred_next_state_mean, gp_pred_next_state_var, cur_input)
+        print(gp_pred_next_state)
+        print(gp_pred_next_state.shape)
+        print(gp_pred_next_state_mean)
+        print(gp_pred_next_state_mean.shape)
+        # gogo
+        particles_update_nf, _ = self.normalizing_flow_propose(np.expand_dims(gp_pred_next_state, axis=0), np.expand_dims(gp_pred_next_state_mean, axis=0), np.expand_dims(gp_pred_next_state_var, axis=0), np.expand_dims(cur_input, axis=0))
         
         return particles_update_nf
     
@@ -85,17 +99,18 @@ class Flows_learning(torch.nn.Module):
         
         params = {'batch_size': 64,
           'shuffle': True,
-          'num_workers': 6}
+        #   'num_workers': 1
+          }
         training_generator = torch.utils.data.DataLoader(training_set, **params)
         
         loss_history = []
         for epoch in range(self.epochs):
-            for batch_idx, (particles_state, particles_state_mean, particles_state_var, particles_obs, particles_inputs) in enumerate(training_generator):
+            for batch_idx, (particles_state, particles_state_mean, particles_state_var, particles_inputs) in enumerate(training_generator):
                 # Zero the gradients from the previous iteration
                 self.optimizer.zero_grad()
 
-                # Call the normalising_flow_propose function with the current batch data
-                particles_update_nf, jac = self.normalizing_flow_propose(particles_state, particles_state_mean, particles_state_var, particles_obs, particles_inputs)
+                # Call the normalizing_flow_propose function with the current batch data
+                particles_update_nf, jac = self.normalizing_flow_propose(particles_state, particles_state_mean, particles_state_var, particles_inputs)
 
                 # Step 3: Calculate the loss and backpropagate the gradients
                 # the prior is going to change !!!! it will be the prior from the gaussian!!

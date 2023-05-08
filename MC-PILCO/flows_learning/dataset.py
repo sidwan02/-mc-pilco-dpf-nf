@@ -26,3 +26,8 @@ class Dataset(torch.utils.data.Dataset):
         particles_inputs = self.particles_inputs_sequence[index]
         
         return particles_state, particles_state_mean, particles_state_var, particles_inputs
+      
+  def __len__(self):
+    'Denotes the total number of samples'
+    assert(len(self.particles_state_sequence) == len(self.particles_inputs_sequence) == len(self.particles_state_mean_sequence) == len(self.particles_state_var_sequence))
+    return len(self.particles_state_sequence)

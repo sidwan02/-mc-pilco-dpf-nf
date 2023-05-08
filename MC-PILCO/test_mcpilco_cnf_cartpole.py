@@ -71,8 +71,6 @@ std_list = std_noise*np.ones(state_dim) # ... for all state dimensions
 fl_SOD_GP = True # Flag to select if to use or not a Subset of Data (SoD) approximation in the GPs
 fl_reinforce_init_dist = 'Gaussian'# Initial distribution of the particles in each of the trials. ['Gaussian','Uniform']
 
-ML.Speed_Model_learning_RBF_MPK_angle_state(num_gp, init_dict_list, T_sampling, angle_indeces, not_angle_indeces, vel_indeces, not_vel_indeces)
-
 print('\n---- Set model learning parameters ----')
 f_model_learning = ML.Speed_Model_learning_RBF_MPK_angle_state  # Model function to be trained
 print(f_model_learning)
@@ -89,15 +87,14 @@ if fl_SOD_GP:
     model_learning_par['approximation_mode'] = 'SOD'
     model_learning_par['approximation_dict'] = {'SOD_threshold_mode':'relative', 'SOD_threshold':.5, 'flg_SOD_permutation':False} # Set SoD threshold
     
-FL.Flows_learning(n_sequence, hidden_size, state_dim)
-    
 # CHANGE: define flows model
 print('\n---- Set flows learning parameters ----')
 f_flows_learning = FL.Flows_learning # Flows function to be trained
-print(f_model_learning)
+print(f_flows_learning)
 flows_learning_par = {}
 flows_learning_par['n_sequence'] = 2
 flows_learning_par['hidden_size'] = 8
+flows_learning_par['state_dim'] = 4
 flows_learning_par['init_var'] = 0.01 
 flows_learning_par['prior_mean'] = 0.1 
 flows_learning_par['prior_std'] = 1.0 
