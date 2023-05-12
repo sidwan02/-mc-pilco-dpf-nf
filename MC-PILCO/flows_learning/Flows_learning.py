@@ -99,16 +99,16 @@ class Flows_learning(torch.nn.Module):
         with torch.no_grad():
             self.train_flows(particles_output_states, particles_state_means, particles_state_vars, particles_observations, particles_action_list)
     
-    def get_next_state(self, gp_pred_next_state, gp_pred_next_state_mean, gp_pred_next_state_var, cur_input):
+    def get_next_state(self, gp_pred_next_state, gp_pred_next_state_mean, gp_pred_next_state_var, cur_input_obs, cur_input_actions):
         # TODO: dimensions might need to be sorted out (propose takes batch data)
         # print(gp_pred_next_state)
-        print(gp_pred_next_state.shape)
+        # print(gp_pred_next_state.shape)
         # print(gp_pred_next_state_mean)
-        print(gp_pred_next_state_mean.shape)
-        print(gp_pred_next_state_var.shape)
-        print(cur_input.shape)
+        # print(gp_pred_next_state_mean.shape)
+        # print(gp_pred_next_state_var.shape)
+        # print(cur_input.shape)
         
-        particles_update_nf, _ = self.normalizing_flow_propose(np.expand_dims(gp_pred_next_state, axis=0), np.expand_dims(gp_pred_next_state_mean, axis=0), np.expand_dims(gp_pred_next_state_var, axis=0), np.expand_dims(cur_input, axis=0))
+        particles_update_nf, _ = self.normalizing_flow_propose(np.expand_dims(gp_pred_next_state, axis=0), np.expand_dims(gp_pred_next_state_mean, axis=0), np.expand_dims(gp_pred_next_state_var, axis=0), np.expand_dims(cur_input_obs, axis=0), np.expand_dims(cur_input_actions, axis=0))
         
         return particles_update_nf
     

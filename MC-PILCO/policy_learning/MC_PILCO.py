@@ -213,7 +213,8 @@ class MC_PILCO_CNF(torch.nn.Module):
             # TODO: the input dimensions need to be fixed
             dims = np.shape(init_particles_output_states)
             
-            self.flows_learning.reinforce_flows(torch.tensor(init_particles_output_states), torch.tensor(np.full(dims, initial_state)), torch.tensor(np.full(dims, initial_state_var)), torch.tensor(init_particles_observations), torch.tensor(init_particles_action_list))
+            # SIDDHARTH: uncomment
+            # self.flows_learning.reinforce_flows(torch.tensor(init_particles_output_states), torch.tensor(np.full(dims, initial_state)), torch.tensor(np.full(dims, initial_state_var)), torch.tensor(init_particles_observations), torch.tensor(init_particles_action_list))
             
             with torch.no_grad():
                 if self.log_path is not None:
@@ -419,8 +420,16 @@ class MC_PILCO_CNF(torch.nn.Module):
             
             # CHANGE: feed the GP output to cnf
             # TODO: the dimensions here are awkward since next_state has current_state + delta_sample whereas the var and mean are only of the delta
-            # rollout_trj[t:t+1,:] = self.flows_learning.get_next_state(next_state, delta_mean, delta_var, inputs_trajectory_tc[t-1:t,:])
-            rollout_trj[t:t+1,:] = next_state
+            current_input_actions = inputs_trajectory_tc[t-1:t,:]
+            current_input_observations = rollout_trj[t-1:t,:]
+            
+            print("current_input_actions shape", np.shape(current_input_actions))
+            print("current_input_observations shape", np.shape(current_input_observations))
+            # debug
+            
+            # SIDDHARTH: uncomment
+            rollout_trj[t:t+1,:] = self.flows_learning.get_next_state(next_state, delta_mean, delta_var, current_input_observations, current_input_actions)
+            # rollout_trj[t:t+1,:] = next_state
             
             
         return rollout_trj.detach().cpu().numpy()
@@ -500,13 +509,14 @@ class MC_PILCO_CNF(torch.nn.Module):
                 else:
                     flg_nan = False
                     
-            print(states_sequence_NODROP.shape)
-            print(states_mean_sequence_NODROP.shape)
-            print(states_var_sequence_NODROP.shape)
-            print(inputs_sequence_NODROP.shape)
+            print("states_sequence_NODROP.shape", states_sequence_NODROP.shape)
+            print("states_mean_sequence_NODROP.shape: ", states_mean_sequence_NODROP.shape)
+            print("states_var_sequence_NODROP.shape: ", states_var_sequence_NODROP.shape)
+            print("inputs_sequence_NODROP.shape: ", inputs_sequence_NODROP.shape)
             baba
                     
             # CHANGE: train the flows using the data
+            # TODO: inputs might not be ..., 5 (it might be either the actions or observations), train_flows takes both separately
             self.flows_learning.train_flows(states_sequence_NODROP, states_mean_sequence_NODROP, states_var_sequence_NODROP, inputs_sequence_NODROP)
 
         # initilize filters 
@@ -555,6 +565,8 @@ class MC_PILCO_CNF(torch.nn.Module):
                     flg_nan = False
                     
                 # CHANGE: train the flows using the data
+                # SIDDHARTH
+                # TODO: inputs might not be ..., 5 (it might be either the actions or observations), train_flows takes both separately
                 self.flows_learning.train_flows(states_sequence, states_mean_sequence, states_var_sequence, inputs_sequence)
 
             # save current step's cost
