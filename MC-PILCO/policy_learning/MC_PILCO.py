@@ -115,14 +115,18 @@ class MC_PILCO_CNF(torch.nn.Module):
                 
         """
         # CHANGE
-        init_particles_state_sequence = []
-        init_particles_input_sequence = []
+        init_particles_output_states = []
+        init_particles_action_list = []
+        init_particles_observations = []
+        
+        # num_particles = None
         
         # get initial data
         if not loaded_model:
             print('\n\n\n\n----------------- INITIAL EXPLORATIONS -----------------')
             
             # perform 'num_explorations' interactions with the system to learn initial model
+            print("num_explorations: ", num_explorations)
             for expl_index in range(0,num_explorations):
                 print('\nEXPLORATION # '+str(expl_index))
                 if random_initial_state == True: # initial state randomly sampled
@@ -136,6 +140,9 @@ class MC_PILCO_CNF(torch.nn.Module):
                         x0 = np.random.normal(initial_state,np.sqrt(initial_state_var))
                 else: # deterministic initial state
                     x0 = initial_state
+                    
+                # print("x0 (initial state): ", np.shape(x0))
+                # gaga
 
                 # interact with the system
                 state_samples, input_samples = self.get_data_from_system(initial_state = x0,
@@ -144,8 +151,25 @@ class MC_PILCO_CNF(torch.nn.Module):
                                           trial_index = expl_index)
                 
                 # CHANGE
-                init_particles_state_sequence.append(state_samples)
-                init_particles_input_sequence.append(input_samples)
+                init_particles_output_states.append(state_samples)
+                init_particles_action_list.append(input_samples)
+                
+                num_particles = np.shape(state_samples)[0]
+                print(np.shape(state_samples))
+                print("num_particles: ", num_particles)
+                
+                init_particles_observations.append(np.repeat([x0], num_particles, axis=0))
+                
+                # if num_particles == None:
+                #     print(np.shape(init_particles_action_list[0]))
+                #     num_particles = np.shape(init_particles_action_list[0])[1]
+                    
+            # print("num_particles: ", num_particles)
+            # haha
+            print("init_particles_output_states shape: ", np.shape(init_particles_output_states))
+            print("init_particles_action_list: ", np.shape(init_particles_action_list))
+            print("init_particles_observations: ", np.shape(init_particles_observations))
+            # bob
                 
                 
             cost_trial_list = []
@@ -187,7 +211,9 @@ class MC_PILCO_CNF(torch.nn.Module):
             # the initial_state and the mean are 0s (see test cartpole.py)
             # TODO: might need to convert input to tensors, figure out if dimensions are correct (and if to use tensor.stack as is done in apply_policy)
             # TODO: the input dimensions need to be fixed
-            self.flows_learning.reinforce_flows(init_particles_state_sequence, np.repeat([initial_state], num_explorations, axis=0), np.repeat([initial_state_var], num_explorations, axis=0), init_particles_input_sequence)
+            dims = np.shape(init_particles_output_states)
+            
+            self.flows_learning.reinforce_flows(torch.tensor(init_particles_output_states), torch.tensor(np.full(dims, initial_state)), torch.tensor(np.full(dims, initial_state_var)), torch.tensor(init_particles_observations), torch.tensor(init_particles_action_list))
             
             with torch.no_grad():
                 if self.log_path is not None:
@@ -393,8 +419,8 @@ class MC_PILCO_CNF(torch.nn.Module):
             
             # CHANGE: feed the GP output to cnf
             # TODO: the dimensions here are awkward since next_state has current_state + delta_sample whereas the var and mean are only of the delta
-            rollout_trj[t:t+1,:] = self.flows_learning.get_next_state(next_state, delta_mean, delta_var, inputs_trajectory_tc[t-1:t,:])
-            # rollout_trj[t:t+1,:] = next_state
+            # rollout_trj[t:t+1,:] = self.flows_learning.get_next_state(next_state, delta_mean, delta_var, inputs_trajectory_tc[t-1:t,:])
+            rollout_trj[t:t+1,:] = next_state
             
             
         return rollout_trj.detach().cpu().numpy()

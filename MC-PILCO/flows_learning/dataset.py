@@ -4,30 +4,32 @@ import torch
 class Dataset(torch.utils.data.Dataset):
   'Characterizes a dataset for PyTorch'
   '''
-    particles_state_sequence = particles per state in the sequence
-    particles_state_sequence_mean = mean per state in the sequence
-    particles_state_var_sequence = var per state in the sequence
-    particles_inputs_sequence_mean = input per state in the sequence (observation from environment || action)
+    particles_states = particles per state in the sequence
+    particles_states_mean = mean per state in the sequence
+    particles_states_vars = var per state in the sequence
+    particles_inputs = input per state in the sequence (observation from environment || action)
   '''
-  def __init__(self, particles_state_sequence, particles_state_mean_sequence, particles_state_var_sequence, particles_inputs_sequence):
+  def __init__(self, particles_states, particles_states_means, particles_states_vars, particles_inputs_observations, particles_inputs_actions):
         'Initialization'
-        self.particles_state_sequence = particles_state_sequence
-        self.particles_state_mean_sequence = particles_state_mean_sequence
-        self.particles_state_var_sequence = particles_state_var_sequence
-        self.particles_inputs_sequence = particles_inputs_sequence
+        self.particles_states = particles_states
+        self.particles_states_means = particles_states_means
+        self.particles_states_vars = particles_states_vars
+        self.particles_inputs_observations = particles_inputs_observations
+        self.particles_inputs_actions = particles_inputs_actions
         
   def __getitem__(self, index):
         'Generates one sample of data'
         # Select sample
         
-        particles_state = self.particles_state_sequence[index]
-        particles_state_mean = self.particles_state_mean_sequence[index]
-        particles_state_var = self.particles_state_var_sequence[index]
-        particles_inputs = self.particles_inputs_sequence[index]
+        particles_state = self.particles_states[index]
+        particles_state_mean = self.particles_states_means[index]
+        particles_state_var = self.particles_states_vars[index]
+        particles_obs = self.particles_inputs_observations[index]
+        particles_action = self.particles_inputs_actions[index]
         
-        return particles_state, particles_state_mean, particles_state_var, particles_inputs
+        return particles_state, particles_state_mean, particles_state_var, particles_obs, particles_action
       
   def __len__(self):
     'Denotes the total number of samples'
-    assert(len(self.particles_state_sequence) == len(self.particles_inputs_sequence) == len(self.particles_state_mean_sequence) == len(self.particles_state_var_sequence))
-    return len(self.particles_state_sequence)
+    assert(len(self.particles_states) == len(self.particles_inputs_observations) == len(self.particles_states_means) == len(self.particles_states_vars) == len(self.particles_inputs_observations) == len(self.particles_inputs_actions))
+    return len(self.particles_states)
