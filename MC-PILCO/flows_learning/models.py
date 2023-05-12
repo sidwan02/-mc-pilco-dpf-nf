@@ -96,7 +96,13 @@ class RealNVP_cond(nn.Module):
         return z, log_det
 
     def inverse(self, z, obser):
+        # print("z.shape", z.shape)
+        # print("obser.shape", obser.shape)
+        # print("dim:", self.dim)
+        # print("obser_dim:", self.obser_dim)
         lower, upper = z[:,:self.dim // 2], z[:,self.dim // 2:]
+        # print("lower.shape: ", lower.shape)
+        # print("upper.shape: ", upper.shape)
         t2_transformed = self.t2(torch.cat([upper,obser],dim=-1))
         s2_transformed = self.s2(torch.cat([upper,obser],dim=-1))
         lower = (lower - t2_transformed) * torch.exp(-s2_transformed)

@@ -93,7 +93,7 @@ f_flows_learning = FL.Flows_learning # Flows function to be trained
 print(f_flows_learning)
 flows_learning_par = {}
 flows_learning_par['n_sequence'] = 2
-flows_learning_par['hidden_size'] = 8
+flows_learning_par['obs_dim'] = 4 #fix: 6
 flows_learning_par['state_dim'] = 4
 flows_learning_par['init_var'] = 0.01 
 flows_learning_par['prior_mean'] = 0.1 

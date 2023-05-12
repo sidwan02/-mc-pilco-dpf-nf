@@ -11,8 +11,12 @@ import numpy as np
 class Flows_learning(torch.nn.Module):
     # builds conditional nf
     # sets params for training
-    def __init__(self, n_sequence, hidden_size, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0, device=torch.float64, dtype=torch.device('cpu')):
+    def __init__(self, n_sequence, obs_dim, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0, device=torch.float64, dtype=torch.device('cpu')):
         super(Flows_learning, self).__init__()
+        
+        self.state_dim = state_dim
+        
+        hidden_size= 2*state_dim+obs_dim+1 # add one for action!! fixed at: 14 (2*state_dim+obs_dim)
         flows = [RealNVP_cond(dim=state_dim, obser_dim=hidden_size) for _ in range(n_sequence)]
 
         for f in flows:
@@ -138,7 +142,7 @@ class Flows_learning(torch.nn.Module):
                 # the prior is going to change !!!! it will be the prior from the gaussian!!
                 #prior_distribution = torch.distributions.MultivariateNormal(torch.zeros(state_dim), torch.eye(state_dim))
 
-                prior_distribution = MultivariateNormal(torch.zeros(state_dim), torch.eye(state_dim))
+                prior_distribution = MultivariateNormal(torch.zeros(self.state_dim), torch.eye(self.state_dim))
                 loss = self.loss_function(particles_update_nf, jac, prior_distribution)  # Modify this line to calculate the loss using your loss function
                 loss.backward()
                 self.optimizer.step()
