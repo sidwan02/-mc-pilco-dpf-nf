@@ -573,7 +573,12 @@ class Model_learning(torch.nn.Module):
         
         # we are predicting the delta between states
         # get the next state
+        print("current_state shape", current_state.shape)
+        print("delta_sample shape", delta_sample.shape)
+        
         next_states = current_state + delta_sample
+        
+        print("next_states.shape: ", next_states.shape)
 
         # return the next state and the delta distribution
         # Mason: What is the use of delta_mean/var if the distributions have been changed now!!

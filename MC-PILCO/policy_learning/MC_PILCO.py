@@ -214,7 +214,7 @@ class MC_PILCO_CNF(torch.nn.Module):
             dims = np.shape(init_particles_output_states)
             
             # SIDDHARTH: uncomment
-            # self.flows_learning.reinforce_flows(torch.tensor(init_particles_output_states), torch.tensor(np.full(dims, initial_state)), torch.tensor(np.full(dims, initial_state_var)), torch.tensor(init_particles_observations), torch.tensor(init_particles_action_list))
+            self.flows_learning.reinforce_flows(torch.tensor(init_particles_output_states), torch.tensor(np.full(dims, initial_state)), torch.tensor(np.full(dims, initial_state_var)), torch.tensor(init_particles_observations), torch.tensor(init_particles_action_list))
             
             with torch.no_grad():
                 if self.log_path is not None:
@@ -427,7 +427,15 @@ class MC_PILCO_CNF(torch.nn.Module):
             print("current_input_observations shape", np.shape(current_input_observations))
             # debug
             
+            # blah = delta_mean + delta_mean
+            # print("blah shape", blah.shape)
+            
+            delta_mean = delta_mean.repeat((1, 2))
+            delta_var = delta_var.repeat((1, 2))
+            
             # SIDDHARTH: uncomment
+            
+            
             rollout_trj[t:t+1,:] = self.flows_learning.get_next_state(next_state, delta_mean, delta_var, current_input_observations, current_input_actions)
             # rollout_trj[t:t+1,:] = next_state
             
@@ -513,11 +521,11 @@ class MC_PILCO_CNF(torch.nn.Module):
             print("states_mean_sequence_NODROP.shape: ", states_mean_sequence_NODROP.shape)
             print("states_var_sequence_NODROP.shape: ", states_var_sequence_NODROP.shape)
             print("inputs_sequence_NODROP.shape: ", inputs_sequence_NODROP.shape)
-            baba
+            # baba
                     
             # CHANGE: train the flows using the data
             # TODO: inputs might not be ..., 5 (it might be either the actions or observations), train_flows takes both separately
-            self.flows_learning.train_flows(states_sequence_NODROP, states_mean_sequence_NODROP, states_var_sequence_NODROP, inputs_sequence_NODROP)
+            self.flows_learning.train_flows(states_sequence_NODROP[1:, :, :], states_mean_sequence_NODROP[1:, :, :], states_var_sequence_NODROP[1:, :, :], states_sequence_NODROP[:-1, :, :], inputs_sequence_NODROP[1:, :, :], False)
 
         # initilize filters 
         ES1_diff_cost = torch.zeros(num_opt_steps+1,device = self.device, dtype = self.dtype)
@@ -567,7 +575,8 @@ class MC_PILCO_CNF(torch.nn.Module):
                 # CHANGE: train the flows using the data
                 # SIDDHARTH
                 # TODO: inputs might not be ..., 5 (it might be either the actions or observations), train_flows takes both separately
-                self.flows_learning.train_flows(states_sequence, states_mean_sequence, states_var_sequence, inputs_sequence)
+                # self.flows_learning.train_flows(states_sequence, states_mean_sequence, states_var_sequence, inputs_sequence)
+                self.flows_learning.train_flows(states_sequence[1:, :, :], states_mean_sequence[1:, :, :], states_var_sequence[1:, :, :], states_sequence[:-1, :, :], inputs_sequence[1:, :, :])
 
             # save current step's cost
             cost_list[opt_step] = cost.data.clone().detach()
@@ -719,13 +728,14 @@ class MC_PILCO_CNF(torch.nn.Module):
         # sample particles at t=0 from initial state distribution
         states_sequence_list.append(state_distribution.rsample())
         
-        print(particles_initial_state_mean.shape)
-        print(particles_initial_state_var.shape)
+        # print(particles_initial_state_mean.shape)
+        # print(particles_initial_state_var.shape)
         # bobobbo
         
         # TODO: how do I add the initial mean and variance? The dimensions are awkward
-        states_mean_sequence_list.append(particles_initial_state_mean)
-        states_var_sequence_list.append(particles_initial_state_var)
+        dims = (400, 4)
+        states_mean_sequence_list.append(torch.Tensor(np.full(dims, particles_initial_state_mean)))
+        states_var_sequence_list.append(torch.Tensor(np.full(dims, particles_initial_state_var)))
 
         # compute initial inputs
         inputs_sequence_list.append(self.control_policy(states_sequence_list[0], t = 0, p_dropout = p_dropout))   
@@ -738,8 +748,11 @@ class MC_PILCO_CNF(torch.nn.Module):
                                                                  current_input = inputs_sequence_list[t-1])
             
             # CHANGE: also maintain list of the particle mean and variance
-            states_mean_sequence_list.append(particles_mean)
-            states_var_sequence_list.append(particles_var)
+            # print(particles.shape)
+            # print(particles_mean.repeat(1, 2).shape)
+            # god
+            states_mean_sequence_list.append(particles_mean.repeat(1, 2))
+            states_var_sequence_list.append(particles_var.repeat(1, 2))
             
             states_sequence_list.append(particles)
 
@@ -747,7 +760,15 @@ class MC_PILCO_CNF(torch.nn.Module):
             inputs_sequence_list.append(self.control_policy(states_sequence_list[t], t = t, p_dropout = p_dropout))
 
         # returns states/inputs trajectories, mean, var
-        return torch.stack(states_sequence_list), torch.stack(states_mean_sequence_list), torch.stack(states_var_sequence_list), torch.stack(inputs_sequence_list)
+        # print("states_sequence_list shape: ", np.shape(states_sequence_list))
+        c = torch.stack(states_sequence_list)
+        # print("c shape: ", np.shape(c))
+        # print("states_mean_sequence_list shape: ", np.shape(states_mean_sequence_list))
+        # print("states_var_sequence_list shape: ", np.shape(states_var_sequence_list))
+        a = torch.stack(states_mean_sequence_list)
+        
+        b = torch.stack(states_var_sequence_list)
+        return c, a, b, torch.stack(inputs_sequence_list)
 
 
     def get_data_from_system(self, initial_state, T_exploration, trial_index, flg_exploration=False):
@@ -1171,11 +1192,15 @@ class MC_PILCO(torch.nn.Module):
         # simulate system evolution for 'T_rollout' steps
         for t in range(1, T_rollout):
             # get next state
+            # thing = rollout_trj[t - 1 : t, :]
+            # print("thing.shape: ", thing.shape)
             rollout_trj[t : t + 1, :], _, _ = self.model_learning.get_next_state(
                 current_state=rollout_trj[t - 1 : t, :],
                 current_input=inputs_trajectory_tc[t - 1 : t, :],
                 particle_pred=particle_pred,
             )
+            
+            # bla
         return rollout_trj.detach().cpu().numpy()
 
     def reinforce_policy(

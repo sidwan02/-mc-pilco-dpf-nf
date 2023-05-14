@@ -4,7 +4,7 @@ All rights reserved. The software, documentationand/or data in this file is prov
 and MERL has no obligations to provide maintenance, support, updates, enhancements or modifications.
 
 MERL specifically disclaims any warranties, including, but not limited to, the implied warranties of merchantability
-and fitness for anyparticular purpose.In no event shall MERL be liable to a]ny party for direct, indirect, special,
+and fitness for anyparticular purpose.In no event shall MERL be liable to any party for direct, indirect, special,
 incidental, or consequential damages, including lost profits, arising out of the use of this software and its documentation,
 even if MERL has been advised of the possibility of such damages.
 
