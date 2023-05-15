@@ -1,6 +1,7 @@
 import torch
 from torch import nn
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+# device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cpu')
 from torch.distributions.multivariate_normal import MultivariateNormal
 # this file run indirectly with cwd = /MC-PILCO so must have relative import to that dir
 from flows_learning.models import *
@@ -11,7 +12,7 @@ import numpy as np
 class Flows_learning(torch.nn.Module):
     # builds conditional nf
     # sets params for training
-    def __init__(self, n_sequence, obs_dim, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0, device=torch.float64, dtype=torch.device('cpu')):
+    def __init__(self, n_sequence, obs_dim, state_dim, init_var=0.01, prior_mean=0.0, prior_std=1.0, device=torch.device('cpu'), dtype=torch.float64):
         super(Flows_learning, self).__init__()
         
         self.state_dim = state_dim
@@ -26,8 +27,8 @@ class Flows_learning(torch.nn.Module):
                                         torch.eye(state_dim).to(device) * prior_std**2)
 
         self.cond_model = NormalizingFlowModel_cond(prior_init, flows, device=device)
-        self.epochs = 100
-        self.optimizer = torch.optim.Adam(self.cond_model.parameters(), lr=0.001)
+        self.epochs = 1
+        self.optimizer = torch.optim.Adam(self.cond_model.parameters(), lr=0.0001)
         self.loss_function = nll_loss
 
     def normalizing_flow_propose(self, pred_particles, pred_particles_mean, pred_particles_var, pred_particles_input_observations, pred_particles_input_chosen_actions, n_sequence=2, hidden_dimension=8, obser_dim=None):
@@ -145,13 +146,15 @@ class Flows_learning(torch.nn.Module):
 
                 # Call the normalizing_flow_propose function with the current batch data
                 particles_update_nf, jac = self.normalizing_flow_propose(particles_state, particles_state_mean, particles_state_var, particles_observations, particles_action_list)
+                
+                # particles_update_nf = particles_update_nf.to('cpu')
 
                 # Step 3: Calculate the loss and backpropagate the gradients
                 # the prior is going to change !!!! it will be the prior from the gaussian!!
                 #prior_distribution = torch.distributions.MultivariateNormal(torch.zeros(state_dim), torch.eye(state_dim))
 
                 prior_distribution = MultivariateNormal(torch.zeros(self.state_dim), torch.eye(self.state_dim))
-                loss = self.loss_function(particles_update_nf, jac, prior_distribution)  # Modify this line to calculate the loss using your loss function
+                loss = self.loss_function(particles_update_nf.to('cpu'), jac.to('cpu'), prior_distribution)  # Modify this line to calculate the loss using your loss function
                 # print("loss: ", loss)
                 
                 if train:
@@ -162,4 +165,4 @@ class Flows_learning(torch.nn.Module):
                 with torch.no_grad():
                     loss_history.append(loss.cpu())
 
-            print(f'Epoch {epoch + 1}/{self.epochs} - Loss: {loss.item()}')
+            # print(f'Epoch {epoch + 1}/{self.epochs} - Loss: {loss.item()}')

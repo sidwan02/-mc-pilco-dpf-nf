@@ -33,7 +33,6 @@ from scipy import signal
 torch.set_num_threads(1)
 dtype=torch.float64
 device=torch.device('cpu')
-
 # define paths
 seed = 1
 folder_path = 'results_tmp/'+str(seed)+'/'

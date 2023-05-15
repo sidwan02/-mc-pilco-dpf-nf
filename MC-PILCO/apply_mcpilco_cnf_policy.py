@@ -33,7 +33,7 @@ from scipy import signal
 torch.set_num_threads(1)
 
 # define paths
-seed = 1
+seed = 2
 folder_path = 'results_tmp/'+str(seed)+'/'
 config_file_path = folder_path+'/config_log.pkl'
 saving_path = folder_path+'/reproduce_policy_log.pkl'
@@ -46,7 +46,8 @@ num_trial = 1
 
 # initialize the object
 config_dict = pkl.load(open(config_file_path,'rb'))
-PL_obj = MC_PILCO.MC_PILCO(**config_dict['MC_PILCO_init_dict'])
+# print(config_dict)
+PL_obj = MC_PILCO.MC_PILCO_CNF(**config_dict['MC_PILCO_CNF_init_dict'])
 T_control = config_dict['reinforce_param_dict']['T_control']
 initial_state = config_dict['reinforce_param_dict']['initial_state']
 

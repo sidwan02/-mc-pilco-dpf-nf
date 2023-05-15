@@ -39,20 +39,24 @@ print(torch.version.cuda)
 # Set the seed
 torch.manual_seed(seed)
 np.random.seed(seed)
+seed = 1
 
 # Default data type
 dtype=torch.float64
 
 # Set the device
-device=torch.device('cpu')
+# device=torch.device('cuda')
 # device=torch.device('cuda:0')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# print("device: ", device)
+# god
 
 # Set number of computational threads
 num_threads = 1
 torch.set_num_threads(num_threads)
 
 print('---- Set environment parameters ----')
-num_trials = 5 # Total trials
+num_trials = 1 # Total trials
 T_sampling = 0.05 # Sampling time
 T_exploration = 3. # Duration of the first exploration trial
 T_control = 3. # Duration of each of the following trials during learning
@@ -191,11 +195,14 @@ model_optimization_opt_list = [model_optimization_opt_dict]*num_gp
 # Policy optimization options
 policy_optimization_dict = {}
 policy_optimization_dict['num_particles'] = 400 # Number of simulated particles in the Monte-Carlo method
-policy_optimization_dict['opt_steps_list'] = [2000, 4000, 4000, 4000, 4000] # Max number of optimization steps for trial
-policy_optimization_dict['lr_list'] = [0.01, 0.01, 0.01, 0.01, 0.01] # Initial learning for trial
+# policy_optimization_dict['opt_steps_list'] = [2000, 4000, 4000, 4000, 4000] # Max number of optimization steps for trial
+policy_optimization_dict['opt_steps_list'] = [1000] # Max number of optimization steps for trial
+# policy_optimization_dict['lr_list'] = [0.01, 0.01, 0.01, 0.01, 0.01] # Initial learning for trial
+policy_optimization_dict['lr_list'] = [0.01] # Initial learning for trial
 policy_optimization_dict['f_optimizer'] = 'lambda p, lr : torch.optim.Adam(p, lr)' # Specify policy optimizer
-policy_optimization_dict['num_step_print'] = 100 # Frequency of printing to screen partial results
-policy_optimization_dict['p_dropout_list'] = [.25, .25, .25, .25, .25] # Dropout initial probability for trial
+policy_optimization_dict['num_step_print'] = 10 # Frequency of printing to screen partial results
+# policy_optimization_dict['p_dropout_list'] = [.25, .25, .25, .25, .25] # Dropout initial probability for trial
+policy_optimization_dict['p_dropout_list'] = [.25] # Dropout initial probability for trial
 policy_optimization_dict['p_drop_reduction'] = 0.25/2 # Dropout reduction parameter
 policy_optimization_dict['alpha_diff_cost'] = 0.99 # Monitoring signal parameter α_s for early stopping criterion
 policy_optimization_dict['min_diff_cost'] = 0.08 # Monitoring signal parameter σ_s for early stopping criterion

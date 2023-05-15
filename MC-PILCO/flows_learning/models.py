@@ -3,7 +3,7 @@ import torch
 
 class NormalizingFlowModel_cond(nn.Module):
 
-    def __init__(self, prior, flows, device='cuda'):
+    def __init__(self, prior, flows, device='cpu'):
         super().__init__()
         self.prior = prior
         self.device = device
@@ -53,6 +53,7 @@ class RealNVP_cond(nn.Module):
     def __init__(self, dim, hidden_dim = 8, base_network=FCNN, obser_dim=None):
         super().__init__()
         self.dim = dim
+        self.device = 'cpu'
         self.obser_dim=obser_dim
         self.t1 = base_network(dim // 2+self.obser_dim, dim // 2, hidden_dim)
         self.s1 = base_network(dim // 2+self.obser_dim, dim // 2, hidden_dim)
@@ -83,6 +84,8 @@ class RealNVP_cond(nn.Module):
         #     param.requires_grad = False
 
     def forward(self, x, obser):
+        x = x.to(self.device)
+        obser = obser.to(self.device)
         lower, upper = x[:,:self.dim // 2], x[:,self.dim // 2:]
         t1_transformed = self.t1(torch.cat([lower,obser],dim=-1))
         s1_transformed = self.s1(torch.cat([lower,obser],dim=-1))
@@ -96,6 +99,8 @@ class RealNVP_cond(nn.Module):
         return z, log_det
 
     def inverse(self, z, obser):
+        z = z.to(self.device)
+        obser = obser.to(self.device)
         # print("z.shape", z.shape)
         # print("obser.shape", obser.shape)
         # print("dim:", self.dim)
